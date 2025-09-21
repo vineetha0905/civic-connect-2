@@ -195,26 +195,39 @@ class CivicConnectAPITester:
         self.run_test("Get Status Checks", "GET", "api/status", 200)
 
 def main():
-    print("🚀 Starting CivicConnect Backend API Tests")
+    print("🚀 Starting Comprehensive CivicConnect Backend API Tests")
     tester = CivicConnectAPITester()
     
     # Test basic endpoints first
     tester.test_basic_endpoints()
     
-    # Test expected civic app endpoints
-    tester.test_civic_endpoints()
+    # Test authentication endpoints
+    tester.test_authentication_endpoints()
+    
+    # Test issues management
+    tester.test_issues_endpoints()
+    
+    # Test comments functionality
+    tester.test_comments_endpoints()
+    
+    # Test admin endpoints
+    tester.test_admin_endpoints()
+    
+    # Test error handling
+    tester.test_error_handling()
     
     # Print results
     print(f"\n📊 Final Results: {tester.tests_passed}/{tester.tests_run} tests passed")
+    print(f"Success Rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
     
     if tester.tests_passed < 3:  # At least basic endpoints should work
         print("❌ Critical: Basic backend endpoints are not working")
         return 1
-    elif tester.tests_passed < tester.tests_run * 0.5:
-        print("⚠️  Warning: More than 50% of expected functionality is missing")
+    elif tester.tests_passed < tester.tests_run * 0.7:
+        print("⚠️  Warning: More than 30% of functionality has issues")
         return 1
     else:
-        print("✅ Backend tests completed")
+        print("✅ Backend tests completed successfully")
         return 0
 
 if __name__ == "__main__":
