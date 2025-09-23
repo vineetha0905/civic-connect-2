@@ -1,7 +1,8 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LanguageContext } from '../App';
 import { ArrowLeft, Camera, Mic, Type, MapPin, Upload } from 'lucide-react';
+import apiService from '../services/api';
 
 const ReportIssue = ({ user }) => {
   const navigate = useNavigate();
@@ -14,8 +15,77 @@ const ReportIssue = ({ user }) => {
     coordinates: null
   });
   const [selectedFile, setSelectedFile] = useState(null);
-  const [recordingType, setRecordingType] = useState('text'); // 'photo', 'voice', 'text'
+  const [recordingType, setRecordingType] = useState('text'); // 'photo', 'text'
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const targetRef = useRef('description');
+  const lastTranscriptTitleRef = useRef('');
+  const lastTranscriptDescRef = useRef('');
+
+  const ensureSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Try Chrome.');
+      return null;
+    }
+    if (!recognitionRef.current) {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false; // only final results to avoid repetition
+      recognition.continuous = true;
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            transcript += event.results[i][0].transcript;
+          }
+        }
+        transcript = transcript.trim();
+        if (!transcript) return;
+        if (targetRef.current === 'title') {
+          if (transcript === lastTranscriptTitleRef.current) return;
+          lastTranscriptTitleRef.current = transcript;
+          setReportData(prev => ({
+            ...prev,
+            title: (prev.title ? (prev.title.trim() + ' ') : '') + transcript
+          }));
+        } else {
+          if (transcript === lastTranscriptDescRef.current) return;
+          lastTranscriptDescRef.current = transcript;
+          setReportData(prev => ({
+            ...prev,
+            description: (prev.description ? (prev.description.trim() + ' ') : '') + transcript
+          }));
+        }
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+      recognitionRef.current = recognition;
+    }
+    return recognitionRef.current;
+  };
+
+  const toggleListening = () => {
+    const recognition = ensureSpeechRecognition();
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+    } else {
+      if (targetRef.current === 'title') {
+        lastTranscriptTitleRef.current = '';
+      } else {
+        lastTranscriptDescRef.current = '';
+      }
+      recognition.start();
+      setIsListening(true);
+    }
+  };
 
   const categories = [
     'Road & Traffic',
@@ -72,27 +142,74 @@ const ReportIssue = ({ user }) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Mock submission
-    setTimeout(() => {
-      const newIssue = {
-        id: Date.now().toString(),
-        ...reportData,
-        userId: user.id,
-        status: 'reported',
-        timestamp: new Date().toISOString(),
-        upvotes: 0,
-        image: selectedFile ? URL.createObjectURL(selectedFile) : null
+    let issueData = null; // Declare issueData in the outer scope
+
+    try {
+      let imageUrl = null;
+      
+      // Upload image if selected
+      if (selectedFile) {
+        const uploadResponse = await apiService.uploadImage(selectedFile);
+        imageUrl = uploadResponse.url;
+      }
+
+      // Validate required fields
+      if (!reportData.coordinates || !reportData.coordinates[0] || !reportData.coordinates[1]) {
+        alert('Please get your location first');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate field lengths
+      if (reportData.title.length < 5) {
+        alert('Title must be at least 5 characters long');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (reportData.description.length < 10) {
+        alert('Description must be at least 10 characters long');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare issue data
+      issueData = {
+        title: reportData.title,
+        description: reportData.description,
+        category: reportData.category,
+        location: {
+          name: reportData.location,
+          coordinates: {
+            latitude: reportData.coordinates[0],
+            longitude: reportData.coordinates[1]
+          }
+        },
+        images: imageUrl ? [{
+          url: imageUrl,
+          publicId: imageUrl.split('/').pop(), // Extract filename as publicId
+          caption: 'Issue image'
+        }] : []
       };
 
-      // Save to localStorage for demo
-      const existingIssues = JSON.parse(localStorage.getItem('user_issues') || '[]');
-      existingIssues.push(newIssue);
-      localStorage.setItem('user_issues', JSON.stringify(existingIssues));
-
+      // Debug: Log the data being sent
+      console.log('Sending issue data:', issueData);
+      console.log('Location object:', issueData.location);
+      console.log('Coordinates:', issueData.location.coordinates);
+      console.log('User data:', user);
+      
+      // Submit to backend
+      const response = await apiService.createIssue(issueData);
+      
       setIsSubmitting(false);
       alert('Issue reported successfully!');
       navigate('/citizen');
-    }, 2000);
+    } catch (error) {
+      setIsSubmitting(false);
+      console.error('Issue creation error:', error);
+      console.error('Issue data sent:', issueData);
+      alert(`Error: ${error.message}`);
+    }
   };
 
   return (
@@ -104,7 +221,7 @@ const ReportIssue = ({ user }) => {
             style={{ 
               background: 'none', 
               border: 'none', 
-              color: '#667eea', 
+              color: '#1e4359', 
               cursor: 'pointer',
               marginRight: '1rem'
             }}
@@ -127,7 +244,7 @@ const ReportIssue = ({ user }) => {
           
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(3, 1fr)', 
+            gridTemplateColumns: 'repeat(2, 1fr)', 
             gap: '1rem',
             marginBottom: '1rem'
           }}>
@@ -141,30 +258,12 @@ const ReportIssue = ({ user }) => {
                 alignItems: 'center',
                 gap: '0.5rem',
                 padding: '1rem',
-                background: recordingType === 'photo' ? '#667eea' : 'transparent',
-                color: recordingType === 'photo' ? 'white' : '#667eea'
+                background: recordingType === 'photo' ? '#1e4359' : 'transparent',
+                color: recordingType === 'photo' ? 'white' : '#1e4359'
               }}
             >
               <Camera size={20} />
               <span>Photo</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-secondary ${recordingType === 'voice' ? 'selected' : ''}`}
-              onClick={() => setRecordingType('voice')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '1rem',
-                background: recordingType === 'voice' ? '#667eea' : 'transparent',
-                color: recordingType === 'voice' ? 'white' : '#667eea'
-              }}
-            >
-              <Mic size={20} />
-              <span>Voice</span>
             </button>
 
             <button
@@ -177,8 +276,8 @@ const ReportIssue = ({ user }) => {
                 alignItems: 'center',
                 gap: '0.5rem',
                 padding: '1rem',
-                background: recordingType === 'text' ? '#667eea' : 'transparent',
-                color: recordingType === 'text' ? 'white' : '#667eea'
+                background: recordingType === 'text' ? '#1e4359' : 'transparent',
+                color: recordingType === 'text' ? 'white' : '#1e4359'
               }}
             >
               <Type size={20} />
@@ -218,33 +317,35 @@ const ReportIssue = ({ user }) => {
             </div>
           )}
 
-          {/* Voice Recording for Voice */}
-          {recordingType === 'voice' && (
-            <div className="image-upload">
-              <Mic className="upload-icon" />
-              <p className="upload-text">Voice recording functionality (Mock)</p>
-              <button 
-                type="button" 
-                className="btn-secondary"
-                style={{ marginTop: '1rem' }}
-              >
-                Start Recording
-              </button>
-            </div>
-          )}
+          {/* Voice panel removed as requested; mic remains near Description */}
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label className="form-label">Issue Title</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Brief title for the issue"
-              value={reportData.title}
-              onChange={(e) => setReportData(prev => ({...prev, title: e.target.value}))}
-              required
-            />
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Brief title for the issue"
+                value={reportData.title}
+                onChange={(e) => setReportData(prev => ({...prev, title: e.target.value}))}
+                required
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  targetRef.current = 'title';
+                  toggleListening();
+                }}
+                title="Dictate title with your voice"
+                style={{ minWidth: '120px' }}
+              >
+                {isListening && targetRef.current === 'title' ? 'Stop' : 'Speak'}
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
@@ -264,14 +365,26 @@ const ReportIssue = ({ user }) => {
 
           <div className="form-group">
             <label className="form-label">Description</label>
-            <textarea
-              className="form-input"
-              rows="4"
-              placeholder="Describe the issue in detail"
-              value={reportData.description}
-              onChange={(e) => setReportData(prev => ({...prev, description: e.target.value}))}
-              required
-            />
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'start' }}>
+              <textarea
+                className="form-input"
+                rows="4"
+                placeholder="Describe the issue in detail or use the mic to dictate"
+                value={reportData.description}
+                onChange={(e) => setReportData(prev => ({...prev, description: e.target.value}))}
+                required
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { targetRef.current = 'description'; toggleListening(); }}
+                title="Dictate with your voice"
+                style={{ minWidth: '120px' }}
+              >
+                {isListening ? 'Stop' : 'Speak'}
+              </button>
+            </div>
           </div>
 
           <div className="form-group">

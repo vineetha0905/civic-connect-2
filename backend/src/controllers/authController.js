@@ -1,0 +1,603 @@
+const User = require('../models/User');
+const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
+const emailService = require('../services/emailService');
+const notificationService = require('../services/notificationService');
+
+class AuthController {
+  // Register a new user
+  async register(req, res) {
+    try {
+      const { name, aadhaarNumber, mobile, email, password, address } = req.body;
+
+      // Check if user already exists
+      const existingUser = await User.findOne({
+        $or: [
+          ...(aadhaarNumber ? [{ aadhaarNumber }] : []),
+          ...(email ? [{ email }] : []),
+          ...(mobile ? [{ mobile }] : [])
+        ]
+      });
+
+      // Prevent Aadhaar conflicts with other accounts
+      if (aadhaarNumber) {
+        const aadhaarConflict = await User.findOne({
+          aadhaarNumber,
+          ...(existingUser ? { _id: { $ne: existingUser._id } } : {})
+        });
+        if (aadhaarConflict) {
+          return res.status(400).json({
+            success: false,
+            message: 'Aadhaar number is already linked to another account'
+          });
+        }
+      }
+
+      if (existingUser) {
+        // Allow upgrading an existing lightweight account (e.g., created via OTP mobile flow)
+        // If Aadhaar is already linked to another user, prevent conflict
+        if (
+          aadhaarNumber &&
+          existingUser.aadhaarNumber &&
+          existingUser.aadhaarNumber !== aadhaarNumber
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Aadhaar number is already linked to another account'
+          });
+        }
+
+        existingUser.name = name || existingUser.name;
+        if (aadhaarNumber) existingUser.aadhaarNumber = aadhaarNumber;
+        if (mobile) existingUser.mobile = mobile;
+        if (email) existingUser.email = email;
+        if (password) existingUser.password = password;
+        if (address) {
+          if (typeof address === 'string') {
+            existingUser.address = { ...(existingUser.address || {}), street: address };
+          } else if (address.street || address.city || address.state || address.pincode) {
+            existingUser.address = { ...(existingUser.address || {}), ...address };
+          }
+        }
+        existingUser.role = 'citizen';
+        existingUser.isVerified = existingUser.isVerified || false;
+
+        try {
+          await existingUser.save();
+        } catch (err) {
+          if (err && err.code === 11000) {
+            const dupField = Object.keys(err.keyPattern || {})[0] || 'field';
+            return res.status(400).json({
+              success: false,
+              message: `User already exists with this ${dupField}`
+            });
+          }
+          throw err;
+        }
+
+        const token = generateToken(existingUser._id);
+        const refreshToken = generateRefreshToken(existingUser._id);
+
+        return res.status(201).json({
+          success: true,
+          message: 'User registered successfully',
+          data: {
+            user: existingUser.getProfile(),
+            token,
+            refreshToken
+          }
+        });
+      }
+
+      // Create new user
+      const user = new User({
+        name,
+        aadhaarNumber,
+        email,
+        mobile,
+        password,
+        role: 'citizen'
+      });
+
+      if (address) {
+        // store as simple string in address.street for compatibility
+        if (typeof address === 'string') {
+          user.address = { street: address };
+        } else if (address.street || address.city || address.state || address.pincode) {
+          user.address = address;
+        }
+      }
+
+      try {
+        await user.save();
+      } catch (err) {
+        if (err && err.code === 11000) {
+          const dupField = Object.keys(err.keyPattern || {})[0] || 'field';
+          return res.status(400).json({
+            success: false,
+            message: `User already exists with this ${dupField}`
+          });
+        }
+        throw err;
+      }
+
+      // Generate OTP for email verification
+      if (email) {
+        const otp = user.generateOTP();
+        await user.save();
+
+        // Send OTP email
+        await emailService.sendOTP(email, otp, name);
+      }
+
+      // Generate tokens
+      const token = generateToken(user._id);
+      const refreshToken = generateRefreshToken(user._id);
+
+      res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        data: {
+          user: user.getProfile(),
+          token,
+          refreshToken
+        }
+      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during registration',
+        error: error.message
+      });
+    }
+  }
+
+  // Login user
+  async login(req, res) {
+    try {
+      const { email, mobile, password } = req.body;
+
+      // Find user by email or mobile
+      const user = await User.findOne({
+        $or: [
+          { email: email },
+          { mobile: mobile }
+        ]
+      }).select('+password');
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Check if account is active
+      if (!user.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: 'Account is deactivated'
+        });
+      }
+
+      // Verify password
+      const isPasswordValid = await user.comparePassword(password);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Update login info
+      user.lastLogin = new Date();
+      user.loginCount += 1;
+      await user.save();
+
+      // Generate tokens
+      const token = generateToken(user._id);
+      const refreshToken = generateRefreshToken(user._id);
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          user: user.getProfile(),
+          token,
+          refreshToken
+        }
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during login',
+        error: error.message
+      });
+    }
+  }
+
+  // Send OTP
+  async sendOTP(req, res) {
+    try {
+      const { aadhaarNumber, mobile, email } = req.body;
+      
+      console.log('Send OTP request:', { aadhaarNumber, mobile, email });
+
+      if (!aadhaarNumber && !mobile && !email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Aadhaar number, mobile number or email is required'
+        });
+      }
+
+      let user;
+      
+      if (aadhaarNumber) {
+        user = await User.findOne({ aadhaarNumber });
+      } else if (mobile) {
+        user = await User.findOne({ mobile });
+      } else {
+        user = await User.findOne({ email });
+      }
+
+      if (!user) {
+        // For Aadhaar/Mobile OTP flow, create a new user if they don't exist
+        if (aadhaarNumber || mobile) {
+          console.log('Creating new user for identifier:', aadhaarNumber || mobile);
+          user = new User({
+            mobile: mobile,
+            aadhaarNumber: aadhaarNumber,
+            name: aadhaarNumber ? `User ${aadhaarNumber.slice(-4)}` : `User ${mobile?.slice(-4)}`,
+            isVerified: false
+          });
+          await user.save();
+          console.log('New user created with ID:', user._id);
+        } else {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+      } else {
+        console.log('Existing user found with ID:', user._id);
+      }
+
+      // Generate OTP
+      const otp = user.generateOTP();
+      console.log('Generated OTP for user:', user._id, 'OTP:', otp);
+      await user.save();
+
+      // Send OTP via email or SMS
+      if (email) {
+        const emailResult = await emailService.sendOTP(email, otp, user.name);
+        if (!emailResult.success) {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to send OTP email',
+            error: emailResult.error
+          });
+        }
+      }
+
+      // For mobile, you would integrate with SMS service
+      // For now, we'll return the OTP in development
+      console.log('NODE_ENV:', process.env.NODE_ENV);
+      if (mobile || aadhaarNumber) {
+        console.log('Returning OTP in development mode:', otp);
+        return res.json({
+          success: true,
+          message: 'OTP sent successfully',
+          data: {
+            otp: otp, // Always return OTP for mobile in development
+            expiresIn: '5 minutes'
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'OTP sent successfully',
+        data: {
+          expiresIn: '5 minutes'
+        }
+      });
+    } catch (error) {
+      console.error('Send OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error sending OTP',
+        error: error.message
+      });
+    }
+  }
+
+  // Verify OTP
+  async verifyOTP(req, res) {
+    try {
+      const { aadhaarNumber, mobile, email, otp } = req.body;
+      
+      console.log('Verify OTP request:', { aadhaarNumber, mobile, email, otp: otp, otpType: typeof otp });
+
+      if (!aadhaarNumber && !mobile && !email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Aadhaar number, mobile number or email is required'
+        });
+      }
+
+      let user;
+      
+      if (aadhaarNumber) {
+        user = await User.findOne({ aadhaarNumber });
+        console.log('User found by aadhaarNumber:', user ? 'Yes' : 'No');
+      } else if (mobile) {
+        user = await User.findOne({ mobile });
+        console.log('User found by mobile:', user ? 'Yes' : 'No');
+      } else {
+        user = await User.findOne({ email });
+        console.log('User found by email:', user ? 'Yes' : 'No');
+      }
+
+      if (!user) {
+        console.log('User not found for:', mobile || email);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      console.log('User OTP data:', { 
+        hasOtp: !!user.otp, 
+        otpCode: user.otp?.code ? '***' : 'undefined',
+        otpExpires: user.otp?.expiresAt 
+      });
+
+      // Verify OTP
+      const isOTPValid = user.verifyOTP(otp);
+      console.log('OTP verification result:', isOTPValid);
+      
+      if (!isOTPValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired OTP'
+        });
+      }
+
+      // Clear OTP
+      user.otp = undefined;
+      user.isVerified = true;
+      await user.save();
+
+      // Generate tokens
+      const token = generateToken(user._id);
+      const refreshToken = generateRefreshToken(user._id);
+
+      res.json({
+        success: true,
+        message: 'OTP verified successfully',
+        data: {
+          user: user.getProfile(),
+          token,
+          refreshToken
+        }
+      });
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error verifying OTP',
+        error: error.message
+      });
+    }
+  }
+
+  // Guest login
+  async guestLogin(req, res) {
+    try {
+      const guestUser = new User({
+        name: 'Guest User',
+        role: 'guest',
+        isGuest: true
+      });
+
+      await guestUser.save();
+
+      // Generate tokens
+      const token = generateToken(guestUser._id);
+      const refreshToken = generateRefreshToken(guestUser._id);
+
+      res.json({
+        success: true,
+        message: 'Guest login successful',
+        data: {
+          user: guestUser.getProfile(),
+          token,
+          refreshToken
+        }
+      });
+    } catch (error) {
+      console.error('Guest login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during guest login',
+        error: error.message
+      });
+    }
+  }
+
+  // Refresh token
+  async refreshToken(req, res) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          message: 'Refresh token is required'
+        });
+      }
+
+      // Verify refresh token
+      const decoded = verifyRefreshToken(refreshToken);
+      const user = await User.findById(decoded.id);
+
+      if (!user || !user.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid refresh token'
+        });
+      }
+
+      // Generate new tokens
+      const newToken = generateToken(user._id);
+      const newRefreshToken = generateRefreshToken(user._id);
+
+      res.json({
+        success: true,
+        message: 'Token refreshed successfully',
+        data: {
+          token: newToken,
+          refreshToken: newRefreshToken
+        }
+      });
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      res.status(401).json({
+        success: false,
+        message: 'Invalid refresh token',
+        error: error.message
+      });
+    }
+  }
+
+  // Get current user profile
+  async getProfile(req, res) {
+    try {
+      res.json({
+        success: true,
+        data: {
+          user: req.user.getProfile()
+        }
+      });
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error getting profile',
+        error: error.message
+      });
+    }
+  }
+
+  // Update user profile
+  async updateProfile(req, res) {
+    try {
+      const { name, email, mobile, address, preferences } = req.body;
+      const userId = req.user._id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Update fields
+      if (name) user.name = name;
+      if (email) user.email = email;
+      if (mobile) user.mobile = mobile;
+      if (address) user.address = address;
+      if (preferences) user.preferences = { ...user.preferences, ...preferences };
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: user.getProfile()
+        }
+      });
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error updating profile',
+        error: error.message
+      });
+    }
+  }
+
+  // Logout (invalidate token)
+  async logout(req, res) {
+    try {
+      // In a more sophisticated setup, you would blacklist the token
+      // For now, we'll just return success
+      res.json({
+        success: true,
+        message: 'Logout successful'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during logout',
+        error: error.message
+      });
+    }
+  }
+
+  // Admin login
+  async adminLogin(req, res) {
+    try {
+      const { username, password } = req.body;
+
+      // Simple admin authentication (in production, use proper admin management)
+      if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+        // Find or create admin user
+        let adminUser = await User.findOne({ role: 'admin' });
+        
+        if (!adminUser) {
+          adminUser = new User({
+            name: 'Admin User',
+            email: process.env.ADMIN_EMAIL,
+            role: 'admin',
+            isVerified: true,
+            isActive: true
+          });
+          await adminUser.save();
+        }
+
+        // Generate tokens
+        const token = generateToken(adminUser._id);
+        const refreshToken = generateRefreshToken(adminUser._id);
+
+        res.json({
+          success: true,
+          message: 'Admin login successful',
+          data: {
+            user: adminUser.getProfile(),
+            token,
+            refreshToken
+          }
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid admin credentials'
+        });
+      }
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during admin login',
+        error: error.message
+      });
+    }
+  }
+}
+
+module.exports = new AuthController();

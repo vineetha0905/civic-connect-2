@@ -25,14 +25,19 @@ const redIcon = createCustomIcon('red');
 const orangeIcon = createCustomIcon('orange');
 const greenIcon = createCustomIcon('green');
 
-const IssueMap = ({ issues = null, onMarkerClick = null }) => {
-  const [mapCenter] = useState([23.2599, 77.4126]); // Bhopal coordinates
+const IssueMap = ({ issues = null, onMarkerClick = null, center = [16.0716, 77.9053], showCenterMarker = true }) => {
+  const [mapCenter, setMapCenter] = useState(center);
+  
+  // Debug logging
+  console.log('IssueMap received issues:', issues);
+  console.log('IssueMap issues type:', typeof issues);
+  console.log('IssueMap issues length:', issues?.length);
   const [mockIssues] = useState([
     {
       id: '1',
       title: 'Broken Street Light',
-      location: 'MG Road, Bhopal',
-      coordinates: [23.2599, 77.4126],
+      location: 'Near Your Location',
+      coordinates: [16.0716, 77.9053],
       status: 'reported',
       upvotes: 15,
       description: 'Street light has been broken for 3 days'
@@ -40,8 +45,8 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
     {
       id: '2',
       title: 'Pothole on Main Road',
-      location: 'DB City Mall Road',
-      coordinates: [23.2456, 77.4200],
+      location: 'Near Your Location',
+      coordinates: [16.0720, 77.9055],
       status: 'in-progress',
       upvotes: 28,
       description: 'Large pothole causing traffic issues'
@@ -49,8 +54,8 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
     {
       id: '3',
       title: 'Garbage Overflow',
-      location: 'Arera Colony',
-      coordinates: [23.2300, 77.4300],
+      location: 'Near Your Location',
+      coordinates: [16.0712, 77.9051],
       status: 'resolved',
       upvotes: 42,
       description: 'Garbage bin overflowing since Monday'
@@ -58,8 +63,8 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
     {
       id: '4',
       title: 'Water Leakage',
-      location: 'New Market Area',
-      coordinates: [23.2650, 77.4100],
+      location: 'Near Your Location',
+      coordinates: [16.0718, 77.9057],
       status: 'reported',
       upvotes: 8,
       description: 'Water pipe leaking on footpath'
@@ -67,15 +72,23 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
     {
       id: '5',
       title: 'Traffic Signal Malfunction',
-      location: 'Bittan Market Chowk',
-      coordinates: [23.2500, 77.4250],
+      location: 'Near Your Location',
+      coordinates: [16.0714, 77.9054],
       status: 'in-progress',
       upvotes: 35,
       description: 'Traffic signal not working properly'
     }
   ]);
 
+  useEffect(() => {
+    if (Array.isArray(center) && center.length === 2) {
+      setMapCenter(center);
+    }
+  }, [center]);
+
   const displayIssues = issues || mockIssues;
+  console.log('IssueMap displayIssues:', displayIssues);
+  console.log('IssueMap displayIssues length:', displayIssues.length);
 
   const getMarkerIcon = (status) => {
     switch (status) {
@@ -112,6 +125,7 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
   return (
     <div className="map-container">
       <MapContainer
+        key={`${mapCenter[0]},${mapCenter[1]}`}
         center={mapCenter}
         zoom={13}
         style={{ height: '100%', width: '100%' }}
@@ -120,6 +134,12 @@ const IssueMap = ({ issues = null, onMarkerClick = null }) => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
+        {/* Optional: center marker */}
+        {showCenterMarker && (
+          <Marker position={mapCenter} icon={createCustomIcon('blue')}>
+            <Popup>Center</Popup>
+          </Marker>
+        )}
         
         {displayIssues.map((issue) => (
           <Marker

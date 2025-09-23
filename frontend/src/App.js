@@ -5,6 +5,7 @@ import './App.css';
 // Import components
 import Welcome from './components/Welcome';
 import Login from './components/Login';
+import Register from './components/Register';
 import CitizenDashboard from './components/CitizenDashboard';
 import ReportIssue from './components/ReportIssue';
 import MyReports from './components/MyReports';
@@ -12,6 +13,8 @@ import NearbyIssues from './components/NearbyIssues';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 import IssueDetail from './components/IssueDetail';
+import Leaderboard from './components/Leaderboard';
+import Profile from './components/Profile';
 
 // Language Context
 export const LanguageContext = React.createContext();
@@ -100,12 +103,13 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Welcome />} />
-            <Route path="/login" element={<Login setUser={setUser} />} />
+            <Route path="/login" element={<Login setUser={setUser} setIsAdmin={setIsAdmin} />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/admin-login" element={<AdminLogin setUser={setUser} setIsAdmin={setIsAdmin} />} />
             
             {/* Citizen Routes */}
             <Route path="/citizen" element={
-              user && !isAdmin ? <CitizenDashboard user={user} /> : <Navigate to="/login" />
+              user && !isAdmin ? <CitizenDashboard user={user} setUser={setUser} /> : <Navigate to="/login" />
             } />
             <Route path="/report-issue" element={
               user && !isAdmin ? <ReportIssue user={user} /> : <Navigate to="/login" />
@@ -116,8 +120,14 @@ function App() {
             <Route path="/nearby-issues" element={
               user && !isAdmin ? <NearbyIssues user={user} /> : <Navigate to="/login" />
             } />
+            <Route path="/leaderboard" element={
+              user && !isAdmin ? <Leaderboard /> : <Navigate to="/login" />
+            } />
             <Route path="/issue/:id" element={
               user ? <IssueDetail user={user} isAdmin={isAdmin} /> : <Navigate to="/login" />
+            } />
+            <Route path="/profile" element={
+              user && !isAdmin ? <Profile /> : <Navigate to="/login" />
             } />
             
             {/* Admin Routes */}

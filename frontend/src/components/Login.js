@@ -1,65 +1,76 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { LanguageContext } from '../App';
-import { ArrowLeft, Phone, Key } from 'lucide-react';
+import { ArrowLeft, IdCard, Key } from 'lucide-react';
+import apiService from '../services/api';
 
-const Login = ({ setUser }) => {
+const Login = ({ setUser, setIsAdmin }) => {
   const navigate = useNavigate();
   const { t } = useContext(LanguageContext);
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [aadhaar, setAadhaar] = useState('');
   const [otp, setOtp] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (phoneNumber.length !== 10) {
-      alert('Please enter a valid 10-digit phone number');
+    if (aadhaar.length !== 12) {
+      alert('Please enter a valid 12-digit Aadhaar number');
       return;
     }
 
     setIsLoading(true);
-    // Mock OTP sending
-    setTimeout(() => {
+    try {
+      const response = await apiService.sendOtpByAadhaar(aadhaar);
       setIsOtpSent(true);
+      
+      // In development mode, show the OTP
+      if (response.data && response.data.otp) {
+        alert(`OTP sent to your phone. Development OTP: ${response.data.otp}`);
+      } else {
+        alert('OTP sent to your phone');
+      }
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
       setIsLoading(false);
-      alert('OTP sent to your phone: 123456');
-    }, 1500);
+    }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (otp !== '123456') {
-      alert('Invalid OTP. Please enter 123456');
+    if (otp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP');
       return;
     }
 
     setIsLoading(true);
-    // Mock user creation
-    setTimeout(() => {
-      const mockUser = {
-        id: Date.now().toString(),
-        name: `User ${phoneNumber.slice(-4)}`,
-        phone: phoneNumber,
-        isGuest: false
+    try {
+      const response = await apiService.verifyOtpByAadhaar(aadhaar, otp);
+      const user = {
+        id: response.data.user._id,
+        name: response.data.user.name,
+        phone: response.data.user.mobile || null,
+        isGuest: false,
+        token: response.data.token
       };
-      setUser(mockUser);
-      localStorage.setItem('civicconnect_user', JSON.stringify(mockUser));
+      setUser(user);
+      localStorage.setItem('civicconnect_user', JSON.stringify(user));
+      localStorage.setItem('civicconnect_token', response.data.token);
+      // Ensure admin session is cleared so citizen routes are accessible
+      try { localStorage.removeItem('civicconnect_admin'); } catch (_) {}
+      if (typeof setIsAdmin === 'function') {
+        setIsAdmin(false);
+      }
       navigate('/citizen');
-    }, 1000);
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleGuestLogin = () => {
-    const guestUser = {
-      id: 'guest',
-      name: 'Guest User',
-      phone: null,
-      isGuest: true
-    };
-    setUser(guestUser);
-    localStorage.setItem('civicconnect_user', JSON.stringify(guestUser));
-    navigate('/citizen');
-  };
+  // Guest login removed as requested
 
   return (
     <div className="login-container">
@@ -69,7 +80,7 @@ const Login = ({ setUser }) => {
           style={{ 
             background: 'none', 
             border: 'none', 
-            color: '#667eea', 
+            color: '#1e4359', 
             cursor: 'pointer',
             marginBottom: '1rem'
           }}
@@ -79,24 +90,24 @@ const Login = ({ setUser }) => {
 
         <div className="login-header">
           <h1 className="login-title">{t('login')}</h1>
-          <p className="login-subtitle">Enter your mobile number to continue</p>
+          <p className="login-subtitle">Enter your Aadhaar number to continue</p>
         </div>
 
         {!isOtpSent ? (
           <form onSubmit={handleSendOtp} className="login-form">
             <div className="form-group">
               <label className="form-label">
-                <Phone size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-                Mobile Number
+                <IdCard size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                Aadhaar Number
               </label>
               <input
                 type="tel"
                 className="form-input"
-                placeholder="Enter 10-digit mobile number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                maxLength={10}
-                pattern="[0-9]{10}"
+                placeholder="Enter 12-digit Aadhaar number"
+                value={aadhaar}
+                onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, ''))}
+                maxLength={12}
+                pattern="[0-9]{12}"
                 required
               />
             </div>
@@ -104,7 +115,7 @@ const Login = ({ setUser }) => {
             <button 
               type="submit" 
               className="btn-primary" 
-              disabled={isLoading || phoneNumber.length !== 10}
+              disabled={isLoading || aadhaar.length !== 12}
             >
               {isLoading ? 'Sending OTP...' : 'Send OTP'}
             </button>
@@ -126,7 +137,7 @@ const Login = ({ setUser }) => {
                 required
               />
               <small style={{ color: '#666', fontSize: '0.8rem' }}>
-                OTP sent to +91 {phoneNumber}
+                OTP sent to Aadhaar ending with {aadhaar.slice(-4)}
               </small>
             </div>
 
@@ -137,30 +148,14 @@ const Login = ({ setUser }) => {
             >
               {isLoading ? 'Verifying...' : 'Verify & Login'}
             </button>
-
-            <button 
-              type="button" 
-              className="btn-secondary"
-              onClick={() => setIsOtpSent(false)}
-            >
-              Change Number
-            </button>
           </form>
         )}
 
-        <div className="login-options">
-          <button 
-            onClick={handleGuestLogin}
-            className="guest-login"
-            style={{ 
-              background: 'none', 
-              border: 'none', 
-              fontSize: '0.9rem',
-              cursor: 'pointer'
-            }}
-          >
-            Continue as Guest
-          </button>
+        {/* Guest login removed */}
+
+        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <span>Don't have an account? </span>
+          <Link to="/register" style={{ color: '#1e4359' }}>Register</Link>
         </div>
       </div>
     </div>

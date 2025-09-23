@@ -2,62 +2,62 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LanguageContext } from '../App';
 import { ArrowLeft, Calendar, MapPin, ThumbsUp, Eye } from 'lucide-react';
+import apiService from '../services/api';
 
 const MyReports = ({ user }) => {
   const navigate = useNavigate();
   const { t } = useContext(LanguageContext);
   const [userIssues, setUserIssues] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  const getImageUrl = (issue) => {
+    try {
+      if (!issue) return null;
+      if (issue.image) return issue.image;
+      if (issue.imageUrl) return issue.imageUrl;
+      if (Array.isArray(issue.images) && issue.images.length > 0) {
+        const first = issue.images[0];
+        return typeof first === 'string' ? first : (first?.url || first?.secure_url || null);
+      }
+      return null;
+    } catch (_e) { return null; }
+  };
 
   useEffect(() => {
-    // Load user's issues from localStorage
-    const savedIssues = JSON.parse(localStorage.getItem('user_issues') || '[]');
-    const filteredIssues = savedIssues.filter(issue => issue.userId === user.id);
-    
-    // Add some mock issues for demo if none exist
-    if (filteredIssues.length === 0) {
-      const mockUserIssues = [
-        {
-          id: 'user_1',
-          title: 'Broken Street Light',
-          description: 'Street light pole is broken and hanging dangerously',
-          category: 'Street Lighting',
-          location: 'Near my house, MG Road',
-          coordinates: [23.2599, 77.4126],
-          status: 'in-progress',
-          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          upvotes: 12,
-          userId: user.id
-        },
-        {
-          id: 'user_2',
-          title: 'Pothole on Road',
-          description: 'Large pothole causing problems for vehicles',
-          category: 'Road & Traffic',
-          location: 'DB City Mall Road',
-          coordinates: [23.2456, 77.4200],
-          status: 'reported',
-          timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          upvotes: 8,
-          userId: user.id
-        },
-        {
-          id: 'user_3',
-          title: 'Water Pipeline Leak',
-          description: 'Water is continuously flowing from a broken pipeline',
-          category: 'Water & Drainage',
-          location: 'Arera Colony Main Road',
-          coordinates: [23.2300, 77.4300],
-          status: 'resolved',
-          timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          upvotes: 25,
-          userId: user.id
-        }
-      ];
-      setUserIssues(mockUserIssues);
-    } else {
+    fetchUserIssues();
+  }, [user.id]);
+
+  const fetchUserIssues = async () => {
+    try {
+      console.log('Fetching issues for user:', user.id);
+      const response = await apiService.getUserIssues(user.id);
+      console.log('User issues response:', response);
+      let issues = response.data?.issues || response.issues || [];
+
+      // Fallback: if API returns empty, fetch all and filter by user id/mobile
+      if (!Array.isArray(issues) || issues.length === 0) {
+        console.log('Primary fetch empty; falling back to filtering all issues');
+        const allResp = await apiService.getIssues({ limit: 200 });
+        const allIssues = allResp.data?.issues || allResp.issues || [];
+        const userId = user.id;
+        const userMobile = user.phone || user.mobile;
+        issues = allIssues.filter((iss) => {
+          const rep = iss.reportedBy;
+          const repId = typeof rep === 'string' ? rep : rep?._id || rep?.id;
+          const repMobile = typeof rep === 'object' ? (rep.mobile || rep.phone) : undefined;
+          return (repId && repId === userId) || (userMobile && repMobile && repMobile === userMobile);
+        });
+      }
+
+      setUserIssues(issues);
+    } catch (error) {
+      console.error('Error fetching user issues:', error);
+      // Fallback to localStorage if API fails
+      const savedIssues = JSON.parse(localStorage.getItem('user_issues') || '[]');
+      const filteredIssues = savedIssues.filter(issue => issue.userId === user.id);
       setUserIssues(filteredIssues);
     }
-  }, [user.id]);
+  };
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -99,7 +99,7 @@ const MyReports = ({ user }) => {
             style={{ 
               background: 'none', 
               border: 'none', 
-              color: '#667eea', 
+              color: '#1e4359', 
               cursor: 'pointer',
               marginRight: '1rem'
             }}
@@ -137,23 +137,53 @@ const MyReports = ({ user }) => {
           <div className="issues-grid" style={{ gridTemplateColumns: '1fr' }}>
             {userIssues.map((issue) => (
               <div 
-                key={issue.id} 
+                key={issue._id || issue.id} 
                 className="issue-card"
-                onClick={() => navigate(`/issue/${issue.id}`)}
+                onClick={() => navigate(`/issue/${issue._id || issue.id}`)}
               >
-                {issue.image && (
-                  <div 
-                    className="issue-image"
-                    style={{ backgroundImage: `url(${issue.image})` }}
-                  />
-                )}
+                {(() => {
+                  const imageUrl = getImageUrl(issue);
+                  return imageUrl ? (
+                  <div>
+                    <div 
+                      className="issue-image"
+                      style={{ 
+                        background: '#f8fafc', 
+                        borderRadius: '8px', 
+                        overflow: 'hidden',
+                        height: '180px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <img 
+                        src={imageUrl}
+                        alt={issue.title || 'Issue image'}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                      <button 
+                        className="btn-secondary"
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                        onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
+                      >
+                        View Image
+                      </button>
+                    </div>
+                  </div>
+                  ) : null;
+                })()}
                 
                 <div className="issue-header">
                   <div>
                     <h3 className="issue-title">{issue.title}</h3>
                     <div className="issue-location">
                       <MapPin size={12} style={{ display: 'inline', marginRight: '0.3rem' }} />
-                      {issue.location}
+                      {issue.location?.name || 'Location not specified'}
                     </div>
                     <div style={{ 
                       fontSize: '0.8rem', 
@@ -164,7 +194,7 @@ const MyReports = ({ user }) => {
                       gap: '0.3rem'
                     }}>
                       <Calendar size={12} />
-                      {formatDate(issue.timestamp)} • {getTimeSince(issue.timestamp)}
+                      {formatDate(issue.createdAt || issue.timestamp)} • {getTimeSince(issue.createdAt || issue.timestamp)}
                     </div>
                   </div>
                   {getStatusBadge(issue.status)}
@@ -200,7 +230,7 @@ const MyReports = ({ user }) => {
                       color: '#64748b'
                     }}>
                       <ThumbsUp size={14} />
-                      {issue.upvotes} upvotes
+                      {issue.upvotedBy?.length || 0} upvotes
                     </div>
                   </div>
                 </div>
@@ -335,6 +365,20 @@ const MyReports = ({ user }) => {
           </div>
         )}
       </div>
+      {previewUrl && (
+        <div 
+          onClick={() => setPreviewUrl('')}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          }}
+        >
+          <img 
+            src={previewUrl} 
+            alt="Issue"
+            style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }}
+          />
+        </div>
+      )}
     </div>
   );
 };

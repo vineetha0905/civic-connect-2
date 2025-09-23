@@ -43,7 +43,7 @@ const AdminLogin = ({ setUser, setIsAdmin }) => {
           style={{ 
             background: 'none', 
             border: 'none', 
-            color: '#667eea', 
+            color: '#1e4359', 
             cursor: 'pointer',
             marginBottom: '1rem'
           }}
@@ -55,7 +55,7 @@ const AdminLogin = ({ setUser, setIsAdmin }) => {
           <div style={{ 
             width: '60px', 
             height: '60px', 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #1e4359 0%, #3f6177 100%)',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',

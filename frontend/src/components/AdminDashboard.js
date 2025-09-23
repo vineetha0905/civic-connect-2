@@ -204,7 +204,7 @@ const AdminDashboard = ({ user }) => {
               key={tab.key}
               onClick={() => setSelectedView(tab.key)}
               style={{
-                background: selectedView === tab.key ? '#667eea' : 'transparent',
+                background: selectedView === tab.key ? '#1e4359' : 'transparent',
                 color: selectedView === tab.key ? 'white' : '#64748b',
                 border: '1px solid #e2e8f0',
                 padding: '0.6rem 1.2rem',
@@ -231,7 +231,7 @@ const AdminDashboard = ({ user }) => {
                 title="Total Issues" 
                 value={stats.totalIssues}
                 icon={AlertTriangle}
-                color="#667eea"
+                color="#1e4359"
                 subtitle="All time reports"
               />
               <StatCard 
@@ -524,17 +524,17 @@ const AdminDashboard = ({ user }) => {
                         <span style={{ fontSize: '0.9rem', color: '#64748b' }}>{item.category}</span>
                         <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1e293b' }}>{item.count}</span>
                       </div>
-                      <div style={{ 
+              <div style={{ 
                         width: '100%', 
                         height: '6px', 
                         background: '#f1f5f9', 
                         borderRadius: '3px',
                         overflow: 'hidden'
                       }}>
-                        <div style={{ 
+                <div style={{ 
                           width: `${item.percentage}%`, 
                           height: '100%', 
-                          background: '#667eea',
+                  background: '#1e4359',
                           transition: 'width 0.5s ease'
                         }} />
                       </div>

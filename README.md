@@ -33,3 +33,4 @@ This section explains, in simple terms, how the whole system works for citizens 
 - Quick registration with automatic address fill from your location.
 - Clear status tracking for reported issues.
 
+# Civic

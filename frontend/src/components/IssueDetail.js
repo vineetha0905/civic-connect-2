@@ -15,6 +15,7 @@ import {
   Settings
 } from 'lucide-react';
 import IssueMap from './IssueMap';
+import apiService from '../services/api';
 
 const IssueDetail = ({ user, isAdmin }) => {
   const navigate = useNavigate();
@@ -26,8 +27,49 @@ const IssueDetail = ({ user, isAdmin }) => {
   const [newComment, setNewComment] = useState('');
 
   useEffect(() => {
-    // Mock issue data - in real app, this would come from API
-    const mockIssues = {
+    fetchIssueData();
+  }, [id]);
+
+  const fetchIssueData = async () => {
+    try {
+      const issueResponse = await apiService.getIssueById(id);
+      const rawIssue = issueResponse.data?.issue || issueResponse.issue || issueResponse;
+      if (!rawIssue) throw new Error('Issue not found');
+
+      const firstImage = Array.isArray(rawIssue.images) && rawIssue.images.length > 0 ? rawIssue.images[0] : null;
+      const imageUrl = (firstImage && (firstImage.url || firstImage.secure_url || (typeof firstImage === 'string' ? firstImage : null))) || rawIssue.image || rawIssue.imageUrl || null;
+
+      const mappedIssue = {
+        id: rawIssue._id || rawIssue.id,
+        title: rawIssue.title,
+        description: rawIssue.description,
+        location: rawIssue.location?.name || 'Location not specified',
+        coordinates: rawIssue.location?.coordinates ?
+          [rawIssue.location.coordinates.latitude, rawIssue.location.coordinates.longitude] :
+          [16.0716, 77.9053],
+        status: rawIssue.status || 'reported',
+        upvotes: rawIssue.upvotedBy?.length || rawIssue.upvotes || 0,
+        category: rawIssue.category || 'General',
+        priority: rawIssue.priority || 'medium',
+        assignedTo: rawIssue.assignedTo || 'Unassigned',
+        reportedBy: rawIssue.reportedBy?.name || rawIssue.reportedBy || 'Citizen',
+        timestamp: rawIssue.createdAt || rawIssue.timestamp,
+        image: imageUrl
+      };
+
+      setIssue(mappedIssue);
+
+      try {
+        const commentsResponse = await apiService.getComments(id);
+        setComments(commentsResponse.data?.comments || commentsResponse.comments || []);
+      } catch (commentsError) {
+        console.warn('Comments fetch failed, continuing without comments:', commentsError);
+        setComments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching issue data:', error);
+      // Fallback to mock data
+      const mockIssues = {
       '1': {
         id: '1',
         title: 'Broken Street Light',
@@ -97,30 +139,50 @@ const IssueDetail = ({ user, isAdmin }) => {
         isAdmin: true
       }
     ]);
-  }, [id, user.name]);
-
-  const handleUpvote = () => {
-    setIsUpvoted(!isUpvoted);
-    setIssue(prev => ({
-      ...prev,
-      upvotes: prev.upvotes + (isUpvoted ? -1 : 1)
-    }));
+    }
   };
 
-  const handleAddComment = (e) => {
+  const handleUpvote = async () => {
+    try {
+      // Optimistic toggle
+      const togglingToUpvoted = !isUpvoted;
+      setIsUpvoted(togglingToUpvoted);
+      setIssue(prev => ({ ...prev, upvotes: prev.upvotes + (togglingToUpvoted ? 1 : -1) }));
+
+      // Call appropriate API
+      if (togglingToUpvoted) {
+        await apiService.upvoteIssue(id);
+      } else {
+        await apiService.removeUpvote(id);
+      }
+    } catch (error) {
+      console.error('Error toggling upvote:', error);
+      // Revert optimistic update
+      setIsUpvoted(prev => !prev);
+      setIssue(prev => ({ ...prev, upvotes: prev.upvotes + (isUpvoted ? 1 : -1) }));
+      alert('Failed to update upvote. Please try again.');
+    }
+  };
+
+  const handleAddComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const comment = {
-      id: comments.length + 1,
-      author: isAdmin ? 'Admin User' : user.name,
-      content: newComment,
-      timestamp: new Date().toISOString(),
-      isAdmin: isAdmin
-    };
+    try {
+      const commentData = {
+        content: newComment,
+        userId: user.id,
+        author: isAdmin ? 'Admin User' : user.name,
+        isAdmin: isAdmin
+      };
 
-    setComments(prev => [...prev, comment]);
-    setNewComment('');
+      const response = await apiService.addComment(id, commentData);
+      setComments(prev => [...prev, response]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      alert('Failed to add comment. Please try again.');
+    }
   };
 
   const handleStatusUpdate = (newStatus) => {
@@ -242,7 +304,7 @@ const IssueDetail = ({ user, isAdmin }) => {
               style={{ 
                 background: 'none', 
                 border: 'none', 
-                color: '#667eea', 
+                color: '#1e4359', 
                 cursor: 'pointer',
                 marginRight: '1rem'
               }}
@@ -382,16 +444,14 @@ const IssueDetail = ({ user, isAdmin }) => {
               }}>
                 Evidence
               </h3>
-              <img 
-                src={issue.image} 
-                alt="Issue evidence" 
-                style={{ 
-                  width: '100%',
-                  maxWidth: '400px',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                }}
-              />
+              <div style={{ background: '#f8fafc', borderRadius: '8px', overflow: 'hidden', maxWidth: '500px' }}>
+                <img 
+                  src={issue.image} 
+                  alt="Issue evidence" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
             </div>
           )}
 
@@ -425,8 +485,11 @@ const IssueDetail = ({ user, isAdmin }) => {
           background: 'white',
           padding: '1.5rem',
           borderRadius: '15px',
-          marginBottom: '1.5rem',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
+          marginBottom: '2rem',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 0
         }}>
           <h3 style={{ 
             fontSize: '1.1rem', 
@@ -436,9 +499,11 @@ const IssueDetail = ({ user, isAdmin }) => {
           }}>
             Location
           </h3>
-          <div style={{ height: '300px' }}>
+          <div style={{ height: '300px', position: 'relative' }}>
             <IssueMap 
               issues={[issue]} 
+              center={issue.coordinates}
+              showCenterMarker={false}
               onMarkerClick={() => {}}
             />
           </div>
@@ -450,7 +515,9 @@ const IssueDetail = ({ user, isAdmin }) => {
           padding: '1.5rem',
           borderRadius: '15px',
           marginBottom: '1.5rem',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
+          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+          position: 'relative',
+          zIndex: 1
         }}>
           <h3 style={{ 
             fontSize: '1.1rem', 

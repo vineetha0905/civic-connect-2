@@ -3,7 +3,7 @@ import sys
 from datetime import datetime
 
 class CivicConnectAPITester:
-    def __init__(self, base_url="https://citiguard-1.preview.emergentagent.com"):
+    def __init__(self, base_url="http://localhost:5000"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0

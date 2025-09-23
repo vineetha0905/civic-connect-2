@@ -68,3 +68,10 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Implementation Flow (Non-Technical)
+
+1. Register: Enter Name, Aadhaar (12 digits), Mobile (10 digits), and Address; optionally autofill address using “Use my location”.
+2. Login: Enter Aadhaar and receive a one‑time password (OTP).
+3. Verify OTP: Enter the 6‑digit OTP to sign in.
+4. Continue: Report issues, view your reports, and track status.
