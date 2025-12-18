@@ -205,6 +205,13 @@ class ApiService {
     return this.handleResponse(response);
   }
 
+   async getAdminAnalytics() {
+     const response = await fetch(`${this.baseURL}/admin/analytics`, {
+       headers: this.getAuthHeaders()
+     });
+     return this.handleResponse(response);
+   }
+
   async assignIssue(issueId, body = {}) {
     const response = await fetch(`${this.baseURL}/admin/issues/${issueId}/assign`, {
       method: 'PUT',
