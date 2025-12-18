@@ -2,8 +2,6 @@ const Issue = require('../models/Issue');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
 const notificationService = require('../services/notificationService');
-
-const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 
 class IssueController {
@@ -290,3 +288,4 @@ class IssueController {
 }
 
 module.exports = new IssueController();
+
