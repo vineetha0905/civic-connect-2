@@ -594,6 +594,7 @@ body {
 /* Form Styles */
 .form-container {
   min-height: 100vh;
+  max-width: 100vw;
   background: #f8fafc;
   padding: 2rem 1rem;
   display: flex;
