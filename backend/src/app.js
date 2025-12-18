@@ -36,11 +36,38 @@ app.use(helmet({
 }));
 
 // CORS configuration
+// Allow:
+// - Explicit origins from CORS_ORIGIN env (comma-separated)
+// - Any Vercel deployment (*.vercel.app) so previews work without manual updates
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+  origin: (origin, callback) => {
+    // Allow non-browser / same-origin requests with no Origin header
+    if (!origin) return callback(null, true);
+
+    try {
+      const hostname = new URL(origin).hostname;
+
+      if (
+        allowedOrigins.includes(origin) ||        // exact matches from env
+        hostname.endsWith('.vercel.app')          // any Vercel deployment
+      ) {
+        return callback(null, true);
+      }
+    } catch (e) {
+      // If origin parsing fails, fall through to reject below
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };
+
 app.use(cors(corsOptions));
 
 // Compression middleware
