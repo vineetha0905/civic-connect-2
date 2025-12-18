@@ -44,29 +44,73 @@ const CitizenDashboard = ({ user, setUser }) => {
           const status = await navigator.permissions.query({ name: 'geolocation' });
           if (status.state === 'denied') {
             setGeoStatus('denied');
+            setUserCenter([16.0716, 77.9053]);
+            return;
           }
         }
       } catch (_) { /* ignore permission API errors */ }
 
       setGeoStatus('requesting');
-      navigator.geolocation.getCurrentPosition(
+      
+      // Use watchPosition with timeout for better reliability
+      const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           setUserCenter([latitude, longitude]);
           setGeoStatus('granted');
+          setGeoError('');
+          navigator.geolocation.clearWatch(watchId);
         },
         (err) => {
-          console.warn('Geolocation error:', err?.message);
-          setGeoError(err?.message || 'Unable to get your location');
-          // Fallback center
+          console.warn('Geolocation error:', err);
+          let errorMessage = 'Unable to get your location';
+          
+          if (err.code === 1) {
+            errorMessage = 'Location permission denied. Please allow location access in your browser settings.';
+            setGeoStatus('denied');
+          } else if (err.code === 2) {
+            errorMessage = 'Location unavailable. Please check your device settings.';
+            setGeoStatus('error');
+          } else if (err.code === 3) {
+            errorMessage = 'Location request timed out. Please try again.';
+            setGeoStatus('error');
+          } else {
+            setGeoStatus('error');
+          }
+          
+          setGeoError(errorMessage);
           setUserCenter([16.0716, 77.9053]);
-          setGeoStatus(err?.code === 1 ? 'denied' : 'error');
+          navigator.geolocation.clearWatch(watchId);
+          
+          // Fallback: try getCurrentPosition with less strict options
+          setTimeout(() => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const { latitude, longitude } = pos.coords;
+                setUserCenter([latitude, longitude]);
+                setGeoStatus('granted');
+                setGeoError('');
+              },
+              () => {}, // Silent fail on fallback
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+            );
+          }, 1000);
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        { 
+          enableHighAccuracy: true, 
+          timeout: 20000, 
+          maximumAge: 300000 // 5 minutes
+        }
       );
+      
+      // Clear watch after 20 seconds if still running
+      setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+      }, 20000);
     } catch (e) {
+      console.error('Location request error:', e);
       setGeoStatus('error');
-      setGeoError('Unexpected error requesting location');
+      setGeoError('Unexpected error requesting location. Using default location.');
       setUserCenter([16.0716, 77.9053]);
     }
   };
@@ -203,9 +247,9 @@ const CitizenDashboard = ({ user, setUser }) => {
         </div>
       </div>
 
-      <div style={{ padding: '1rem' }}>
+      <div className="dashboard-content-section" style={{ padding: '1rem', maxWidth: '100%', boxSizing: 'border-box' }}>
         <h3 style={{ 
-          fontSize: '1.2rem', 
+          fontSize: 'clamp(1rem, 4vw, 1.2rem)', 
           fontWeight: '600', 
           color: '#1e293b', 
           marginBottom: '1rem' 
@@ -213,36 +257,56 @@ const CitizenDashboard = ({ user, setUser }) => {
           Issues Near You
         </h3>
         {geoStatus !== 'granted' && (
-          <div style={{ 
+          <div className="location-prompt" style={{ 
             background: '#fff7ed', 
             border: '1px solid #fed7aa', 
             color: '#9a3412', 
-            padding: '10px', 
+            padding: 'clamp(0.75rem, 2vw, 1rem)', 
             borderRadius: '8px', 
-            marginBottom: '12px'
+            marginBottom: '12px',
+            width: '100%',
+            boxSizing: 'border-box'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.9rem' }}>
+            <div className="location-prompt-content" style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              gap: '8px' 
+            }}>
+              <span style={{ fontSize: 'clamp(0.8rem, 3vw, 0.9rem)', flex: 1 }}>
                 {geoStatus === 'requesting' ? 'Requesting your location…' :
                  geoStatus === 'denied' ? 'Location permission denied. Please allow access to show nearby issues.' :
                  geoStatus === 'error' ? (geoError || 'Unable to determine your location.') :
                  'We use your location to show nearby issues.'}
               </span>
-              <button onClick={requestLocation} style={{
-                background: '#fb923c', color: 'white', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer'
+              <button onClick={requestLocation} className="location-button" style={{
+                background: '#fb923c', 
+                color: 'white', 
+                border: 'none', 
+                padding: 'clamp(0.5rem, 2vw, 0.625rem) clamp(0.75rem, 3vw, 1rem)', 
+                borderRadius: '6px', 
+                cursor: 'pointer',
+                fontSize: 'clamp(0.8rem, 3vw, 0.9rem)',
+                whiteSpace: 'nowrap'
               }}>
                 Use my location
               </button>
             </div>
             {geoStatus === 'denied' && (
-              <div style={{ marginTop: '6px', fontSize: '0.8rem' }}>
+              <div style={{ marginTop: '6px', fontSize: 'clamp(0.7rem, 2.5vw, 0.8rem)' }}>
                 Tip: In your browser address bar, click the location icon and allow access for this site.
               </div>
             )}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-          <span style={{ color: '#475569', fontSize: '0.9rem' }}>Radius: {radiusKm} km</span>
+        <div className="radius-controls" style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px', 
+          marginBottom: '12px',
+          width: '100%'
+        }}>
+          <span style={{ color: '#475569', fontSize: 'clamp(0.8rem, 3vw, 0.9rem)', whiteSpace: 'nowrap' }}>Radius: {radiusKm} km</span>
           <input 
             type="range" 
             min="1" 
@@ -250,11 +314,13 @@ const CitizenDashboard = ({ user, setUser }) => {
             step="1" 
             value={radiusKm} 
             onChange={(e) => setRadiusKm(Number(e.target.value))}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0, width: '100%' }}
           />
-          <span style={{ color: '#475569', fontSize: '0.9rem' }}>{issues.length} issues</span>
+          <span style={{ color: '#475569', fontSize: 'clamp(0.8rem, 3vw, 0.9rem)', whiteSpace: 'nowrap' }}>{issues.length} issues</span>
         </div>
-        <IssueMap issues={issues} center={userCenter || [16.0716, 77.9053]} />
+        <div className="map-wrapper" style={{ width: '100%', height: 'clamp(280px, 40vh, 400px)', borderRadius: '12px', overflow: 'hidden' }}>
+          <IssueMap issues={issues} center={userCenter || [16.0716, 77.9053]} />
+        </div>
       </div>
 
       {/* Bottom Navigation */}

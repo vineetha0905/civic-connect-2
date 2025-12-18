@@ -68,28 +68,73 @@ const NearbyIssues = ({ user }) => {
           const status = await navigator.permissions.query({ name: 'geolocation' });
           if (status.state === 'denied') {
             setGeoStatus('denied');
+            setUserCenter([16.0716, 77.9053]);
+            return;
           }
         }
       } catch (_) { /* ignore */ }
 
       setGeoStatus('requesting');
-      navigator.geolocation.getCurrentPosition(
+      
+      // Use watchPosition with timeout for better reliability
+      const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           setUserCenter([latitude, longitude]);
           setGeoStatus('granted');
+          setGeoError('');
+          navigator.geolocation.clearWatch(watchId);
         },
         (err) => {
-          console.warn('Geolocation error:', err?.message);
-          setGeoError(err?.message || 'Unable to get your location');
+          console.warn('Geolocation error:', err);
+          let errorMessage = 'Unable to get your location';
+          
+          if (err.code === 1) {
+            errorMessage = 'Location permission denied. Please allow location access in your browser settings.';
+            setGeoStatus('denied');
+          } else if (err.code === 2) {
+            errorMessage = 'Location unavailable. Please check your device settings.';
+            setGeoStatus('error');
+          } else if (err.code === 3) {
+            errorMessage = 'Location request timed out. Please try again.';
+            setGeoStatus('error');
+          } else {
+            setGeoStatus('error');
+          }
+          
+          setGeoError(errorMessage);
           setUserCenter([16.0716, 77.9053]);
-          setGeoStatus(err?.code === 1 ? 'denied' : 'error');
+          navigator.geolocation.clearWatch(watchId);
+          
+          // Fallback: try getCurrentPosition with less strict options
+          setTimeout(() => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const { latitude, longitude } = pos.coords;
+                setUserCenter([latitude, longitude]);
+                setGeoStatus('granted');
+                setGeoError('');
+              },
+              () => {}, // Silent fail on fallback
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+            );
+          }, 1000);
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        { 
+          enableHighAccuracy: true, 
+          timeout: 20000, 
+          maximumAge: 300000 // 5 minutes
+        }
       );
+      
+      // Clear watch after 20 seconds if still running
+      setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+      }, 20000);
     } catch (e) {
+      console.error('Location request error:', e);
       setGeoStatus('error');
-      setGeoError('Unexpected error requesting location');
+      setGeoError('Unexpected error requesting location. Using default location.');
       setUserCenter([16.0716, 77.9053]);
     }
   };

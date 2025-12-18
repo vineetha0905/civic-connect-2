@@ -118,34 +118,73 @@ const ReportIssue = ({ user }) => {
   };
 
   const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setReportData(prev => ({
-            ...prev,
-            coordinates: [latitude, longitude],
-            location: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`
-          }));
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          // Mock location for demo
-          setReportData(prev => ({
-            ...prev,
-            coordinates: [23.2599, 77.4126],
-            location: 'MG Road, Bhopal (Mock Location)'
-          }));
-        }
-      );
-    } else {
-      // Mock location for demo
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
       setReportData(prev => ({
         ...prev,
         coordinates: [23.2599, 77.4126],
-        location: 'MG Road, Bhopal (Mock Location)'
+        location: 'MG Road, Bhopal (Default Location)'
       }));
+      return;
     }
+    
+    toast.info('Requesting your location...');
+    
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setReportData(prev => ({
+          ...prev,
+          coordinates: [latitude, longitude],
+          location: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`
+        }));
+        toast.success('Location obtained successfully');
+        navigator.geolocation.clearWatch(watchId);
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+        let errorMsg = 'Unable to get your location';
+        if (error.code === 1) {
+          errorMsg = 'Location permission denied. Please allow location access.';
+        } else if (error.code === 2) {
+          errorMsg = 'Location unavailable. Please check your device settings.';
+        } else if (error.code === 3) {
+          errorMsg = 'Location request timed out. Please try again.';
+        }
+        toast.error(errorMsg);
+        
+        // Fallback: try with less strict options
+        setTimeout(() => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude } = position.coords;
+              setReportData(prev => ({
+                ...prev,
+                coordinates: [latitude, longitude],
+                location: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`
+              }));
+              toast.success('Location obtained successfully');
+            },
+            () => {
+              // Final fallback
+              setReportData(prev => ({
+                ...prev,
+                coordinates: [23.2599, 77.4126],
+                location: 'MG Road, Bhopal (Default Location)'
+              }));
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+          );
+        }, 1000);
+        navigator.geolocation.clearWatch(watchId);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 }
+    );
+    
+    // Clear watch after 20 seconds
+    setTimeout(() => {
+      navigator.geolocation.clearWatch(watchId);
+    }, 20000);
   };
 
   const handleSubmit = async (e) => {

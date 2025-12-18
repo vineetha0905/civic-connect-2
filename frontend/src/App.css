@@ -673,6 +673,18 @@ body {
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .dashboard-container {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  
+  .actions-grid {
+    max-width: 100%;
+    gap: 0.875rem;
+  }
+}
+
 @media (max-width: 768px) {
   .welcome-container {
     padding: 1.5rem 1rem;
@@ -692,20 +704,58 @@ body {
     justify-content: center;
   }
   
+  /* Dashboard Responsive */
+  .dashboard-container {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  
+  .dashboard-header {
+    padding: 1.5rem 1rem 2.5rem;
+  }
+  
+  .dashboard-greeting {
+    font-size: 1.5rem;
+  }
+  
+  .dashboard-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .dashboard-actions {
+    padding: 0.75rem;
+    margin-top: -1.5rem;
+  }
+  
   .actions-grid {
     margin-bottom: 5rem;
+    gap: 0.875rem;
+    max-width: 100%;
   }
   
-  .admin-header {
-    padding: 1rem;
+  .action-card {
+    padding: 1.25rem;
+    border-radius: 16px;
+    gap: 0.875rem;
   }
   
-  .admin-content {
-    padding: 1rem;
+  .action-icon {
+    min-width: 48px;
+    width: 48px;
+    height: 48px;
   }
   
-  .stats-grid {
-    grid-template-columns: 1fr;
+  .action-content h3 {
+    font-size: 1rem;
+  }
+  
+  .action-content p {
+    font-size: 0.85rem;
+  }
+  
+  /* Form Responsive */
+  .form-container {
+    padding: 1rem 0.75rem;
   }
   
   .form-card {
@@ -732,11 +782,13 @@ body {
   .btn-secondary {
     padding: 0.8rem;
     font-size: 0.9rem;
+    width: 100%;
   }
 
   .form-row-inline {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
   }
 
   .form-row-inline .btn-secondary {
@@ -746,25 +798,162 @@ body {
 
   .issues-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
 
+  /* Admin Responsive */
   .admin-container {
     overflow-x: hidden;
   }
-
+  
   .admin-header {
+    padding: 1rem;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
   }
-
+  
   .admin-content {
     padding: 1rem 0.75rem;
   }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 
+  /* Map Responsive */
   .map-container {
     margin: 0.75rem;
     height: 320px;
+    border-radius: 12px;
+  }
+  
+  /* Dashboard content section responsive */
+  .dashboard-content-section {
+    padding: 0.75rem !important;
+  }
+  
+  /* Location prompt responsive */
+  .location-prompt {
+    padding: 0.75rem !important;
+  }
+  
+  .location-prompt-content {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+  
+  .location-button {
+    width: 100% !important;
+    padding: 0.5rem !important;
+    font-size: 0.85rem !important;
+  }
+  
+  /* Radius controls responsive */
+  .radius-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+  
+  .radius-controls input[type="range"] {
+    width: 100% !important;
+  }
+  
+  .map-wrapper {
+    height: 280px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-header {
+    padding: 1.25rem 0.75rem 2rem;
+  }
+  
+  .dashboard-greeting {
+    font-size: 1.3rem;
+  }
+  
+  .dashboard-actions {
+    padding: 0.5rem;
+  }
+  
+  .action-card {
+    padding: 1rem;
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .action-icon {
+    margin: 0 auto;
+  }
+  
+  .form-container {
+    padding: 0.5rem;
+  }
+  
+  .form-card {
+    padding: 1rem 0.75rem 1.5rem;
+  }
+  
+  .form-title {
+    font-size: 1.2rem;
+  }
+  
+  .map-container {
+    margin: 0.5rem;
+    height: 280px;
+  }
+  
+  .bottom-nav {
+    padding: 0.5rem 0.25rem;
+  }
+  
+  .nav-item {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+  }
+  
+  .nav-item svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Viewport height adjustments for mobile */
+@media (max-height: 700px) and (max-width: 768px) {
+  .dashboard-header {
+    padding: 1rem 0.75rem 1.5rem;
+  }
+  
+  .dashboard-actions {
+    margin-top: -1rem;
+    padding: 0.5rem;
+  }
+  
+  .action-card {
+    padding: 0.875rem;
+  }
+  
+  .map-container {
+    height: 250px;
+  }
+}
+
+/* Landscape mobile adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .dashboard-header {
+    padding: 1rem 0.75rem 1.5rem;
+  }
+  
+  .dashboard-actions {
+    margin-top: -1rem;
+  }
+  
+  .map-container {
+    height: 300px;
   }
 }
 
