@@ -300,13 +300,14 @@ def classify_report(report: dict):
             if lat is not None and lon is not None:
                 storage.is_duplicate_location(lat, lon, desc, cat, threshold=1.0, store=True)
 
-        # 5. Priority (urgent vs normal) using keywords (category-scoped + global)
+        # 5. Priority (urgent vs medium) using keywords (category-scoped + global)
+        # Note: Issue model accepts: 'low', 'medium', 'high', 'urgent'
         urgent_words = [
             *(URGENT_KEYWORDS.get(cat, [])),
             *(URGENT_KEYWORDS.get("Global", []))
         ]
         is_urgent = any(word in desc_lower for word in urgent_words)
-        priority = "urgent" if is_urgent else "normal"
+        priority = "urgent" if is_urgent else "medium"  # Changed from "normal" to "medium"
 
         # 6. Image classification (if image provided and not already classified)
         if image_url and image_cat is None:

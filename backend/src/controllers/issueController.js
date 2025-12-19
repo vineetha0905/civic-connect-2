@@ -294,12 +294,24 @@ class IssueController {
       }
 
       // ---------- SAVE ISSUE ----------
+      // Map ML priority to valid enum values: ['low', 'medium', 'high', 'urgent']
+      let priority = mlResult.priority || 'medium';
+      // Normalize priority values from ML backend
+      const priorityMap = {
+        'normal': 'medium',
+        'urgent': 'urgent',
+        'high': 'high',
+        'medium': 'medium',
+        'low': 'low'
+      };
+      priority = priorityMap[priority?.toLowerCase()] || 'medium';
+      
       const issue = new Issue({
         title,
         description,
         category,
         location,
-        priority: mlResult.priority || 'medium',
+        priority,
         tags,
         isAnonymous,
         reportedBy: req.user._id,
