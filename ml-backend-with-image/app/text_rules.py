@@ -6,7 +6,7 @@ def normalize(text: str) -> str:
 
 
 # ------------------------------------
-# Utility: safe word / phrase matching
+# Utility: safe word/phrase matching
 # ------------------------------------
 def contains(text: str, keyword: str) -> bool:
     """
@@ -22,25 +22,30 @@ def contains(text: str, keyword: str) -> bool:
 # Abusive words
 # ------------------------------------
 ABUSIVE_WORDS = [
+    # Direct profanity
     "fuck", "fucking", "motherfucker",
     "shit", "shitty",
     "asshole", "arsehole",
     "bitch", "bastard",
     "slut", "whore",
 
+    # Insults
     "idiot", "moron", "stupid", "dumb",
     "fool", "loser", "nonsense",
     "useless", "worthless",
     "pathetic", "disgusting",
 
+    # Aggression / hostility
     "bloody", "damn", "hell",
     "scam", "fraud",
     "cheater", "corrupt", "corruption", "bribe",
 
+    # Demeaning phrases
     "dirty people", "garbage people",
     "worst people", "illiterate",
     "uneducated", "shameless",
 
+    # Harassment
     "go to hell",
     "shut up",
     "get lost",
@@ -49,13 +54,14 @@ ABUSIVE_WORDS = [
 ]
 
 
+
 def is_abusive(description: str) -> bool:
     text = normalize(description)
     return any(contains(text, word) for word in ABUSIVE_WORDS)
 
 
 # ------------------------------------
-# Category keywords
+# Category keywords (CORRECTED)
 # ------------------------------------
 CATEGORY_KEYWORDS = {
 
@@ -76,8 +82,12 @@ CATEGORY_KEYWORDS = {
         "bad smell", "toxic smell", "foul smell",
         "dustbin", "overflowing bin",
         "sanitation", "sewage", "sewer", "manhole",
+
+        # DEAD ANIMAL (strict & safe)
         "dead", "dead animal", "animal carcass",
-        "dead dog", "dead cat", "dead cow", "dead body",
+        "dead dog", "dead cat", "dead cow",
+        "dead body",
+
         "mosquito", "flies", "infection", "disease"
     ],
 
@@ -112,7 +122,7 @@ CATEGORY_KEYWORDS = {
 
     "Public Safety": [
         "fire", "smoke", "burning",
-        "gas leak", "cylinder leak",
+        "gas", "gas leak", "cylinder leak",
         "collapse", "building collapse",
         "wall collapse", "roof falling",
         "crime", "theft", "robbery",
@@ -134,7 +144,7 @@ CATEGORY_KEYWORDS = {
 
 
 # ------------------------------------
-# Category detection
+# Category detection (IMPROVED)
 # ------------------------------------
 def detect_category(description: str) -> str:
     text = normalize(description)
@@ -152,6 +162,7 @@ def detect_category(description: str) -> str:
             best_category = category
             max_keyword_length = max(len(kw) for kw in matches)
         elif score == max_score and score > 0:
+            # Tie-breaker: more specific (longer phrase) wins
             longest = max(len(kw) for kw in matches)
             if longest > max_keyword_length:
                 best_category = category
@@ -161,9 +172,10 @@ def detect_category(description: str) -> str:
 
 
 # ------------------------------------
-# Urgency detection
+# Urgency keywords
 # ------------------------------------
 URGENCY_KEYWORDS = {
+
     "high": [
         "fire", "burning", "smoke",
         "accident", "collision", "crash",
@@ -176,6 +188,7 @@ URGENCY_KEYWORDS = {
         "flood", "waterlogging",
         "tree fallen"
     ],
+
     "medium": [
         "broken", "damaged", "cracked",
         "not working", "malfunction",
@@ -188,9 +201,13 @@ URGENCY_KEYWORDS = {
 }
 
 
+# ------------------------------------
+# Urgency detection (SAFE OVERRIDE)
+# ------------------------------------
 def detect_urgency(description: str) -> str:
     text = normalize(description)
 
+    # Hard safety override
     if any(contains(text, k) for k in ["dead", "fire", "collapse", "gas leak"]):
         return "high"
 
