@@ -11,7 +11,6 @@ const ReportIssue = ({ user }) => {
   const [reportData, setReportData] = useState({
     title: '',
     description: '',
-    category: '',
     location: '',
     coordinates: null
   });
@@ -88,16 +87,6 @@ const ReportIssue = ({ user }) => {
     }
   };
 
-  const categories = [
-    'Road & Traffic',
-    'Water & Drainage',
-    'Electricity',
-    'Garbage & Sanitation',
-    'Street Lighting',
-    'Public Safety',
-    'Parks & Recreation',
-    'Other'
-  ];
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -226,11 +215,10 @@ const ReportIssue = ({ user }) => {
         return;
       }
 
-      // Prepare issue data
+      // Prepare issue data (category will be auto-detected by ML backend)
       issueData = {
         title: reportData.title,
         description: reportData.description,
-        category: reportData.category,
         location: {
           name: reportData.location,
           coordinates: {
@@ -251,11 +239,10 @@ const ReportIssue = ({ user }) => {
       console.log('Coordinates:', issueData.location.coordinates);
       console.log('User data:', user);
       
-      // 1) Validate with ML backend first
+      // 1) Validate with ML backend first (category will be auto-detected)
       const mlPayload = {
         report_id: `${Date.now()}`,
         description: reportData.description,
-        category: reportData.category,
         user_id: user?._id || user?.id || 'anon',
         image_url: imageUrl || null,
         latitude: reportData.coordinates[0],
@@ -268,33 +255,32 @@ const ReportIssue = ({ user }) => {
         console.log('ML validation result:', mlResult);
         
         // Check if ML backend rejected the report
-        if (mlResult && mlResult.status === 'rejected') {
+        if (mlResult && (mlResult.accept === false || mlResult.status === 'rejected')) {
           setIsSubmitting(false);
           const reason = mlResult.reason || 'Report rejected by validator';
           toast.error(`Report rejected: ${reason}`);
           return;
         }
         
-        // If status is not 'accepted', also reject
-        if (mlResult && mlResult.status && mlResult.status !== 'accepted') {
+        // If accept is false or status is not 'accepted', also reject
+        if (mlResult && (mlResult.accept === false || (mlResult.status && mlResult.status !== 'accepted'))) {
           setIsSubmitting(false);
           const reason = mlResult.reason || 'Report rejected by validator';
           toast.error(`Report rejected: ${reason}`);
           return;
         }
+        
+        // Use ML-detected category if available
+        if (mlResult && mlResult.category) {
+          issueData.category = mlResult.category;
+        }
       } catch (mlError) {
         console.error('ML validation error:', mlError);
-        // Only proceed if it's a network/connection error, not a rejection
-        if (mlError.message && mlError.message.includes('Failed to fetch')) {
-          toast.warning('ML validation service unavailable, proceeding with submission...');
-          mlResult = { status: 'accepted' };
-        } else {
-          // For other errors, show the error and stop submission
-          setIsSubmitting(false);
-          const errorMsg = mlError.message || 'ML validation failed';
-          toast.error(`ML validation error: ${errorMsg}`);
-          return;
-        }
+        // ML service is required for category detection - reject if unavailable
+        setIsSubmitting(false);
+        const errorMsg = mlError.message || 'Category detection service unavailable';
+        toast.error(`Unable to process report: ${errorMsg}. Please try again later.`);
+        return;
       }
 
       // 2) Submit to backend only if accepted
@@ -348,7 +334,7 @@ const ReportIssue = ({ user }) => {
           
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(2, 1fr)', 
+            gridTemplateColumns: 'repeat(1, 1fr)', 
             gap: '1rem',
             marginBottom: '1rem'
           }}>
@@ -370,23 +356,7 @@ const ReportIssue = ({ user }) => {
               <span>Photo</span>
             </button>
 
-            <button
-              type="button"
-              className={`btn-secondary ${recordingType === 'text' ? 'selected' : ''}`}
-              onClick={() => setRecordingType('text')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '1rem',
-                background: recordingType === 'text' ? '#1e4359' : 'transparent',
-                color: recordingType === 'text' ? 'white' : '#1e4359'
-              }}
-            >
-              <Type size={20} />
-              <span>Text</span>
-            </button>
+            
           </div>
 
           {/* File Upload for Photo */}
@@ -470,21 +440,6 @@ const ReportIssue = ({ user }) => {
                 {isListening && targetRef.current === 'title' ? 'Stop' : 'Speak'}
               </button>
             </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Category</label>
-            <select
-              className="form-input"
-              value={reportData.category}
-              onChange={(e) => setReportData(prev => ({...prev, category: e.target.value}))}
-              required
-            >
-              <option value="">Select a category</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
           </div>
 
           <div className="form-group">

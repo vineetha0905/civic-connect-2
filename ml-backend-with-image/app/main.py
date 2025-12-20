@@ -27,7 +27,7 @@ def submit_report(data: dict):
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Request body must be a JSON object")
         
-        required_fields = ["report_id", "description", "category"]
+        required_fields = ["report_id", "description"]
         missing_fields = [field for field in required_fields if field not in data or not data.get(field)]
         
         if missing_fields:

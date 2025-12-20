@@ -135,6 +135,7 @@ const validateIssueCreation = [
     .withMessage('Description must be between 10 and 1000 characters'),
   
   body('category')
+    .optional() // Category is auto-detected by ML backend, not required from frontend
     .isIn([
       'Road & Traffic',
       'Water & Drainage',

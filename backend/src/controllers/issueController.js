@@ -219,14 +219,14 @@ class IssueController {
       const {
         title,
         description,
-        category,
         location,
         tags = [],
         isAnonymous = false
       } = req.body;
 
-      // ---------- ML VALIDATION (BEST-EFFORT / OPTIONAL) ----------
-      let mlResult = { status: 'accepted', priority: 'medium' };
+      // ---------- ML VALIDATION (REQUIRED FOR CATEGORY DETECTION) ----------
+      let mlResult = { accept: false, status: 'rejected', category: 'Other', department: 'Other', urgency: 'low', priority: 'medium' };
+      let category = 'Other'; // Default fallback
 
       if (process.env.ML_API_URL) {
         try {
@@ -234,12 +234,17 @@ class IssueController {
           const latitude = Array.isArray(coords) ? coords[0] : coords?.latitude || null;
           const longitude = Array.isArray(coords) ? coords[1] : coords?.longitude || null;
 
+          // Get image URL from request if available
+          let imageUrl = null;
+          if (req.body.images && Array.isArray(req.body.images) && req.body.images.length > 0) {
+            imageUrl = req.body.images[0].url || null;
+          }
+
           const mlPayload = {
             report_id: uuidv4(),
             description,
-            category,
             user_id: req.user._id.toString(),
-            image_url: null,
+            image_url: imageUrl,
             latitude,
             longitude
           };
@@ -254,21 +259,44 @@ class IssueController {
             const parsed = await mlResponse.json();
             mlResult = parsed || mlResult;
 
-            if (mlResult.status === 'rejected') {
+            // Check if ML backend rejected the report
+            if (mlResult.accept === false || mlResult.status === 'rejected') {
               const reason = mlResult.reason || 'Report rejected by validator';
               return res.status(400).json({
                 success: false,
-                message: reason, // Use reason as the main message for clarity
+                message: reason,
                 reason: reason
               });
             }
+
+            // Use ML-detected category
+            if (mlResult.category) {
+              category = mlResult.category;
+            }
           } else {
-            // If ML service is unavailable, continue gracefully
-            console.warn('ML service unavailable, continuing without ML validation');
+            // If ML service is unavailable, reject the request (category detection is required)
+            console.error('ML service unavailable - category detection is required');
+            return res.status(503).json({
+              success: false,
+              message: 'Category detection service unavailable. Please try again later.',
+              reason: 'ML service unavailable'
+            });
           }
         } catch (mlError) {
-          console.warn('ML validation failed, continuing without ML:', mlError.message);
+          console.error('ML validation failed:', mlError.message);
+          return res.status(503).json({
+            success: false,
+            message: 'Category detection service error. Please try again later.',
+            reason: mlError.message
+          });
         }
+      } else {
+        // ML_API_URL not configured - reject the request
+        return res.status(500).json({
+          success: false,
+          message: 'Category detection service not configured.',
+          reason: 'ML_API_URL not configured'
+        });
       }
 
       // ---------- IMAGE NORMALIZATION ----------
@@ -295,7 +323,7 @@ class IssueController {
 
       // ---------- SAVE ISSUE ----------
       // Map ML priority to valid enum values: ['low', 'medium', 'high', 'urgent']
-      let priority = mlResult.priority || 'medium';
+      let priority = mlResult.priority || mlResult.urgency || 'medium';
       // Normalize priority values from ML backend
       const priorityMap = {
         'normal': 'medium',
@@ -309,7 +337,7 @@ class IssueController {
       const issue = new Issue({
         title,
         description,
-        category,
+        category, // Use ML-detected category
         location,
         priority,
         tags,
