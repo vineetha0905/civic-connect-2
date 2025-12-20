@@ -12,35 +12,69 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*pkg_resources
 
 
 # ------------------------------------
-# Image → Category reference
+# Image → Category reference (COMPREHENSIVE)
 # ------------------------------------
 IMAGE_TO_CATEGORY_MAP = {
     "Road & Traffic": [
-        "road", "street", "pothole", "damaged road", "traffic", "accident"
+        "pothole", "damaged road", "illegal parking", "broken footpath",
+        "traffic signal not working", "road accident", "road", "street", "traffic",
+        "speed breaker", "crosswalk", "footpath", "pavement", "crack", "broken road",
+        "road caved", "road sinking", "uneven road", "traffic jam", "congestion",
+        "signal", "junction", "crossroad", "accident", "collision", "crash", "hit",
+        "speed bump", "divider", "sidewalk", "zebra crossing", "pedestrian", "highway",
+        "bridge", "intersection", "pavement", "asphalt"
     ],
     "Garbage & Sanitation": [
-        "garbage", "trash", "waste", "dustbin", "sewage", "dead animal"
-    ],
-    "Water & Drainage": [
-        "water", "flood", "drain", "pipe leak", "overflow"
-    ],
-    "Electricity": [
-        "electricity", "power", "wire", "transformer", "short circuit"
+        "garbage dump", "overflowing dustbin", "open drain", "sewage overflow",
+        "dead animal", "toilet issue", "garbage", "trash", "waste", "bin",
+        "sanitation", "dirty", "sewage", "cleanliness", "dustbin", "dump", "dumping",
+        "garbage pile", "waste pile", "filthy", "unclean", "bad smell", "toxic smell",
+        "foul smell", "overflowing bin", "sewer", "manhole", "dead", "animal carcass",
+        "dead dog", "dead cat", "dead cow", "dead body", "mosquito", "flies", "infection", "disease"
     ],
     "Street Lighting": [
-        "streetlight", "lamp", "light", "dark"
+        "streetlight not working", "fallen electric pole", "loose wire", "power outage",
+        "streetlight", "lamp", "bulb", "pole", "light", "electric pole",
+        "street lamp", "lighting", "dark area", "electricity", "power",
+        "broken streetlight", "non-working light", "flickering light", "dim light",
+        "street lighting", "outdoor lighting", "public lighting", "night lighting",
+        "lamp post", "pole light", "not working", "broken light", "flickering",
+        "dark", "no lighting", "illumination"
     ],
-    "Public Safety": [
-        "fire", "smoke", "gas leak", "collapse", "hazard"
+    "Water & Drainage": [
+        "waterlogging", "pipe burst", "no water supply", "drainage issue", "flood",
+        "drain", "drainage", "sewage", "sewer", "leak", "leaking", "leakage",
+        "pipe", "water", "overflow", "water supply", "drainage system",
+        "no water", "low pressure", "drinking water", "contaminated water",
+        "pipe leak", "broken pipe", "blocked drain", "overflowing drain",
+        "stagnant water", "sewage water", "rain water", "water pipe"
     ],
     "Parks & Recreation": [
-        "park", "garden", "tree", "playground"
+        "tree fallen", "illegal construction", "park maintenance", "encroachment",
+        "park", "garden", "playground", "tree", "bench", "grass", "lawn",
+        "recreation", "green space", "park area", "garden area", "flooded park",
+        "water in park", "park with water", "playground equipment", "walking path",
+        "fountain", "pond", "lake", "outdoor space", "public space",
+        "children park", "public park", "swing", "slide", "walking track",
+        "fallen tree", "broken fence", "garden bench"
+    ],
+    "Public Safety": [
+        "fire", "gas leak", "building collapse", "accident site",
+        "crime", "robbery", "theft", "violence", "hazard", "danger",
+        "safety", "harassment", "emergency", "accident", "smoke", "burning",
+        "gas", "cylinder leak", "collapse", "wall collapse", "roof falling",
+        "theft", "fight", "assault", "unsafe", "life risk", "explosion"
+    ],
+    "Electricity": [
+        "electric", "electricity", "power", "outage", "wire", "transformer",
+        "short circuit", "shock", "cable", "meter", "electrical", "voltage", "current",
+        "no power", "power cut", "pole", "electric pole", "spark",
+        "electrocution", "electric shock", "live wire", "power line"
     ]
 }
 
 GENERIC_IMAGE_LABELS = {
-    "other", "road", "street", "outdoor",
-    "outdoor space", "public space", "area", "scene"
+    "other", "outdoor", "outdoor space", "public space", "area", "scene", "general"
 }
 
 
@@ -69,10 +103,19 @@ def classify_report(report: dict):
                     category
                 )
 
+                        # Image duplicate detection - only check if image exists
+        # Use stricter threshold (1) to only catch exact duplicates
         if image_url:
-            if storage.is_duplicate_image(image_url, threshold=3, store=False):
-                return reject(report, "Duplicate image detected", category)
-            storage.is_duplicate_image(image_url, threshold=3, store=True)
+            try:
+                # Check for duplicates with very strict threshold (only exact/near-exact matches)
+                is_dup = storage.is_duplicate_image(image_url, threshold=1, store=False)
+                if is_dup:
+                    return reject(report, "Duplicate image detected. This image has already been used.", category)
+                # Only store if not a duplicate (to track for future checks)
+                storage.is_duplicate_image(image_url, threshold=1, store=True)
+            except Exception as e:
+                # If duplicate check fails, allow submission (don't block on technical errors)
+                print(f"Duplicate check error (allowing): {str(e)}")
 
         urgency = detect_urgency(description)
         priority = {
@@ -80,7 +123,7 @@ def classify_report(report: dict):
             "medium": "medium",
             "low": "low"
         }.get(urgency, "medium")
-
+        
         result = {
             "report_id": report.get("report_id", "unknown"),
             "accept": True,
@@ -100,36 +143,57 @@ def classify_report(report: dict):
 
 
 # ------------------------------------
-# Image validation logic
+# Image validation logic (FLEXIBLE & ACCURATE)
 # ------------------------------------
 def image_matches_category(image_url: str, category: str) -> bool:
     try:
         image_label = ic.classify_image(image_url)
         image_label = str(image_label).lower().strip() if image_label else "other"
+        
+        # If classifier returns "other" or fails, be lenient - allow it
+        if not image_label or image_label == "other" or image_label in GENERIC_IMAGE_LABELS:
+            return True
 
-        allowed_labels = IMAGE_TO_CATEGORY_MAP.get(category, [])
-        category_keywords = CATEGORY_KEYWORDS.get(category, [])
+        allowed_labels = [lbl.lower() for lbl in IMAGE_TO_CATEGORY_MAP.get(category, [])]
+        category_keywords = [kw.lower() for kw in CATEGORY_KEYWORDS.get(category, [])]
 
+        # Method 1: Direct exact match
+        if image_label in allowed_labels:
+            return True
+
+        # Method 2: Check if image label contains any allowed label
         for lbl in allowed_labels:
             if lbl in image_label or image_label in lbl:
                 return True
 
+        # Method 3: Check if image label contains any category keyword
         for kw in category_keywords:
-            if kw in image_label:
+            if kw in image_label or image_label in kw:
                 return True
 
+        # Method 4: Word-level matching (split and check)
         image_words = set(image_label.split())
         for lbl in allowed_labels:
-            if image_words.intersection(lbl.split()):
+            lbl_words = set(lbl.split())
+            if image_words.intersection(lbl_words):
                 return True
 
-        if image_label in GENERIC_IMAGE_LABELS:
-            return True
+        # Method 5: Partial word matching (check if any word from image appears in keywords)
+        for word in image_words:
+            for kw in category_keywords:
+                if word in kw or kw in word:
+                    return True
+            for lbl in allowed_labels:
+                if word in lbl or lbl in word:
+                    return True
 
+        # If none match, reject only if it's clearly unrelated
+        # Be lenient - only reject if we're very sure it doesn't match
         return False
 
-    except Exception:
-        # classifier failure → allow
+    except Exception as e:
+        # classifier failure → allow (don't block on technical errors)
+        print(f"Image classification error (allowing): {str(e)}")
         return True
 
 
@@ -138,12 +202,12 @@ def image_matches_category(image_url: str, category: str) -> bool:
 # ------------------------------------
 def reject(report, reason, category="Other"):
     result = {
-        "report_id": report.get("report_id", "unknown"),
+            "report_id": report.get("report_id", "unknown"),
         "accept": False,
-        "status": "rejected",
+            "status": "rejected",
         "category": category,
         "department": category,
         "reason": reason
-    }
+        }
     dataset.save_report({**report, **result})
     return result
