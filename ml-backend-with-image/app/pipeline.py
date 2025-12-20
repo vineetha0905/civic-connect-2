@@ -94,23 +94,23 @@ def classify_report(report: dict):
         if is_abusive(description):
             return reject(report, "Abusive language detected", category)
 
+        # STEP 1: Check image against detected category FIRST
         image_url = report.get("image_url")
         if image_url:
+            # First validate image matches the category
             if not image_matches_category(image_url, category):
                 return reject(
                     report,
-                    "Image does not match the issue description",
+                    "Image does not match the issue description. Please provide an image related to the reported category.",
                     category
                 )
-
-                        # Image duplicate detection - only check if image exists
-        # Use stricter threshold (1) to only catch exact duplicates
-        if image_url:
+            
+            # STEP 2: Only check for duplicates if image matches category
             try:
                 # Check for duplicates with very strict threshold (only exact/near-exact matches)
                 is_dup = storage.is_duplicate_image(image_url, threshold=1, store=False)
                 if is_dup:
-                    return reject(report, "Duplicate image detected. This image has already been used.", category)
+                    return reject(report, "Duplicate image detected. This image has already been used in another report.", category)
                 # Only store if not a duplicate (to track for future checks)
                 storage.is_duplicate_image(image_url, threshold=1, store=True)
             except Exception as e:
@@ -146,53 +146,71 @@ def classify_report(report: dict):
 # Image validation logic (FLEXIBLE & ACCURATE)
 # ------------------------------------
 def image_matches_category(image_url: str, category: str) -> bool:
+    """
+    Check if image matches the detected category.
+    Returns True if image is related to category, False if clearly unrelated.
+    """
     try:
         image_label = ic.classify_image(image_url)
         image_label = str(image_label).lower().strip() if image_label else "other"
         
-        # If classifier returns "other" or fails, be lenient - allow it
-        if not image_label or image_label == "other" or image_label in GENERIC_IMAGE_LABELS:
-            return True
-
+        # If classifier fails or returns generic, be lenient but still check
+        if not image_label:
+            image_label = "other"
+        
+        # Get allowed labels and keywords for this category
         allowed_labels = [lbl.lower() for lbl in IMAGE_TO_CATEGORY_MAP.get(category, [])]
         category_keywords = [kw.lower() for kw in CATEGORY_KEYWORDS.get(category, [])]
 
-        # Method 1: Direct exact match
+        # If "other" or generic, check if we can still match with keywords
+        if image_label == "other" or image_label in GENERIC_IMAGE_LABELS:
+            # For generic labels, be more lenient - allow if description is clear
+            # But still try to match with category keywords from description
+            if category_keywords:
+                # If we have category keywords, allow (description is clear enough)
+                return True
+            # If no keywords, still allow (better to accept than reject incorrectly)
+            return True
+
+        # Method 1: Direct exact match with allowed labels
         if image_label in allowed_labels:
             return True
 
-        # Method 2: Check if image label contains any allowed label
+        # Method 2: Check if image label contains any allowed label (substring match)
         for lbl in allowed_labels:
             if lbl in image_label or image_label in lbl:
                 return True
 
-        # Method 3: Check if image label contains any category keyword
+        # Method 3: Check if image label contains any category keyword from description
         for kw in category_keywords:
             if kw in image_label or image_label in kw:
                 return True
 
-        # Method 4: Word-level matching (split and check)
+        # Method 4: Word-level matching (split and check for common words)
         image_words = set(image_label.split())
         for lbl in allowed_labels:
             lbl_words = set(lbl.split())
-            if image_words.intersection(lbl_words):
+            common_words = image_words.intersection(lbl_words)
+            if common_words and len(common_words) > 0:
                 return True
 
-        # Method 5: Partial word matching (check if any word from image appears in keywords)
+        # Method 5: Check if any word from image appears in category keywords
         for word in image_words:
-            for kw in category_keywords:
-                if word in kw or kw in word:
-                    return True
-            for lbl in allowed_labels:
-                if word in lbl or lbl in word:
-                    return True
+            if len(word) > 2:  # Only check meaningful words (length > 2)
+                for kw in category_keywords:
+                    if word in kw or kw in word:
+                        return True
+                for lbl in allowed_labels:
+                    if word in lbl or lbl in word:
+                        return True
 
-        # If none match, reject only if it's clearly unrelated
-        # Be lenient - only reject if we're very sure it doesn't match
+        # If none of the methods match, the image is likely unrelated
+        # Return False to reject
         return False
 
     except Exception as e:
-        # classifier failure → allow (don't block on technical errors)
+        # If classification fails completely, be lenient - allow submission
+        # Don't block users due to technical errors
         print(f"Image classification error (allowing): {str(e)}")
         return True
 
