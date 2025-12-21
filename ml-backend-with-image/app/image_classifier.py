@@ -21,7 +21,16 @@ def initialize_clip():
         _available = False
 
 def classify_image(image_url: str, candidate_labels=None) -> str:
-    """Return best matching label from candidate_labels or 'other' on failure."""
+    """Return best matching label from candidate_labels or 'other' on failure.
+    CLIP model is loaded lazily (on first use) to save memory.
+    """
+    # Lazy load CLIP model if not already loaded
+    global _clip_model, _clip_processor, _available
+    if not _available and _clip_model is None:
+        with _clip_lock:
+            if not _available and _clip_model is None:
+                initialize_clip()
+    
     if candidate_labels is None:
         candidate_labels = [
     # Roads & Transport

@@ -1,15 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.pipeline import classify_report, initialize_models
+from app.pipeline import classify_report
 from app.models import ReportIn
 import traceback
 
 app = FastAPI(title="Civic ML Backend API")
 
-# Initialize models on startup
-@app.on_event("startup")
-async def startup_event():
-    initialize_models()
+# Note: Models are loaded lazily (on first use) to save memory
+# CLIP model will be loaded when first image classification is needed
 
 app.add_middleware(
     CORSMiddleware,
