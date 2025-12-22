@@ -26,33 +26,35 @@ print("=" * 50)
 # Note: Models are loaded lazily (on first use) to save memory
 # CLIP model will be loaded when first image classification is needed
 
-# CORS configuration
-# IMPORTANT: When allow_credentials=True, you CANNOT use allow_origins=["*"]
-# Since this ML endpoint doesn't need credentials (cookies/auth headers), 
-# we set allow_credentials=False and can safely use allow_origins=["*"]
-# For production, you can restrict origins by setting CORS_ORIGINS env var
-
-# Get allowed origins from environment variable (comma-separated)
+# CORS configuration - SIMPLIFIED AND RELIABLE
+# The simplest approach: allow all origins with credentials=False
+# This is safe because we don't use cookies or authentication headers
 cors_origins_env = os.getenv("CORS_ORIGINS", "")
-if cors_origins_env:
-    # Use specific origins from environment
-    cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-else:
-    # Default: Allow all origins (safe because credentials=False)
-    cors_origins = ["*"]
 
+# Always use ["*"] for maximum compatibility - this works with allow_credentials=False
+# FastAPI CORSMiddleware supports this combination
+cors_origins = ["*"]
+
+# Add CORS middleware - MUST be added before routes are defined
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=False,  # No credentials needed - allows wildcard origins
-    allow_methods=["GET", "POST", "OPTIONS", "HEAD"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # CRITICAL: Must be False when using "*"
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
+    max_age=3600,  # Cache preflight for 1 hour
 )
 
 # Log CORS configuration
-print(f"CORS configured - allow_origins: {cors_origins}")
-print(f"CORS allow_credentials: False")
+print("=" * 50)
+print("CORS Configuration:")
+print("  allow_origins: ['*'] (all origins)")
+print("  allow_credentials: False")
+print("  allow_methods: * (all methods)")
+print("  allow_headers: * (all headers)")
+print("  max_age: 3600")
+print("=" * 50)
 
 @app.get("/")
 def health():
@@ -62,6 +64,12 @@ def health():
 def health_check():
     """Health check endpoint for Render"""
     return {"status": "healthy", "service": "ML Backend"}
+
+# Add explicit OPTIONS handler for CORS preflight
+@app.options("/submit")
+async def submit_options():
+    """Handle CORS preflight requests"""
+    return {"status": "ok"}
 
 @app.post("/submit")
 async def submit_report(data: ReportIn):
