@@ -55,7 +55,24 @@ class AuthController {
           if (typeof address === 'string') {
             existingUser.address = { ...(existingUser.address || {}), street: address };
           } else if (address.street || address.city || address.state || address.pincode) {
-            existingUser.address = { ...(existingUser.address || {}), ...address };
+            // Clean address object - remove undefined values, especially for nested coordinates
+            const cleanAddress = {};
+            if (address.street) cleanAddress.street = address.street;
+            if (address.city) cleanAddress.city = address.city;
+            if (address.state) cleanAddress.state = address.state;
+            if (address.pincode) cleanAddress.pincode = address.pincode;
+            
+            // Only include coordinates if both latitude and longitude are defined
+            if (address.coordinates && 
+                address.coordinates.latitude !== undefined && 
+                address.coordinates.longitude !== undefined) {
+              cleanAddress.coordinates = {
+                latitude: address.coordinates.latitude,
+                longitude: address.coordinates.longitude
+              };
+            }
+            
+            existingUser.address = { ...(existingUser.address || {}), ...cleanAddress };
           }
         }
         existingUser.role = 'citizen';
@@ -107,7 +124,24 @@ class AuthController {
         if (typeof address === 'string') {
           user.address = { street: address };
         } else if (address.street || address.city || address.state || address.pincode) {
-          user.address = address;
+          // Clean address object - remove undefined values, especially for nested coordinates
+          const cleanAddress = {};
+          if (address.street) cleanAddress.street = address.street;
+          if (address.city) cleanAddress.city = address.city;
+          if (address.state) cleanAddress.state = address.state;
+          if (address.pincode) cleanAddress.pincode = address.pincode;
+          
+          // Only include coordinates if both latitude and longitude are defined
+          if (address.coordinates && 
+              address.coordinates.latitude !== undefined && 
+              address.coordinates.longitude !== undefined) {
+            cleanAddress.coordinates = {
+              latitude: address.coordinates.latitude,
+              longitude: address.coordinates.longitude
+            };
+          }
+          
+          user.address = cleanAddress;
         }
       }
 
