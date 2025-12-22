@@ -224,10 +224,12 @@ class IssueController {
         isAnonymous = false
       } = req.body;
 
-      // ---------- ML VALIDATION (REQUIRED FOR CATEGORY DETECTION) ----------
-      let mlResult = { accept: false, status: 'rejected', category: 'Other', department: 'Other', urgency: 'low', priority: 'medium' };
-      let category = 'Other'; // Default fallback
+      // ---------- ML VALIDATION (NON-BLOCKING - OPTIONAL FOR CATEGORY DETECTION) ----------
+      let category = req.body.category || 'Other'; // Use provided category or default
+      let priority = req.body.priority || 'medium'; // Use provided priority or default
+      let mlResult = null;
 
+      // ML validation is now optional - if it fails, we proceed with provided/default category
       if (process.env.ML_API_URL) {
         try {
           const coords = location?.coordinates;
@@ -249,54 +251,63 @@ class IssueController {
             longitude
           };
 
-          const mlResponse = await fetch(process.env.ML_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mlPayload)
-          });
+          // Set a timeout for ML validation (10 seconds) - use Promise.race for compatibility
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('ML_TIMEOUT')), 10000)
+          );
 
-          if (mlResponse.ok) {
-            const parsed = await mlResponse.json();
-            mlResult = parsed || mlResult;
+          try {
+            const mlResponse = await Promise.race([
+              fetch(process.env.ML_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(mlPayload)
+              }),
+              timeoutPromise
+            ]);
 
-            // Check if ML backend rejected the report
-            if (mlResult.accept === false || mlResult.status === 'rejected') {
-              const reason = mlResult.reason || 'Report rejected by validator';
-              return res.status(400).json({
-                success: false,
-                message: reason,
-                reason: reason
-              });
+            if (mlResponse.ok) {
+              const parsed = await mlResponse.json();
+              mlResult = parsed;
+
+              // Only reject if ML explicitly rejects the report
+              if (mlResult && mlResult.accept === false && mlResult.status === 'rejected') {
+                const reason = mlResult.reason || 'Report rejected by validator';
+                return res.status(400).json({
+                  success: false,
+                  message: reason,
+                  reason: reason
+                });
+              }
+
+              // Use ML-detected category if available
+              if (mlResult && mlResult.category) {
+                category = mlResult.category;
+              }
+
+              // Use ML-detected priority if available
+              if (mlResult && mlResult.priority) {
+                priority = mlResult.priority === 'urgent' ? 'urgent' : 'medium';
+              }
+            } else {
+              // ML service returned error - log but continue with default category
+              console.warn('ML service returned error, using default category:', mlResponse.status);
             }
-
-            // Use ML-detected category
-            if (mlResult.category) {
-              category = mlResult.category;
+          } catch (fetchError) {
+            // Timeout or network error - log but continue with default category
+            if (fetchError.message === 'ML_TIMEOUT') {
+              console.warn('ML validation timeout, using default category');
+            } else {
+              console.warn('ML validation network error, using default category:', fetchError.message);
             }
-          } else {
-            // If ML service is unavailable, reject the request (category detection is required)
-            console.error('ML service unavailable - category detection is required');
-            return res.status(503).json({
-              success: false,
-              message: 'Category detection service unavailable. Please try again later.',
-              reason: 'ML service unavailable'
-            });
           }
         } catch (mlError) {
-          console.error('ML validation failed:', mlError.message);
-          return res.status(503).json({
-            success: false,
-            message: 'Category detection service error. Please try again later.',
-            reason: mlError.message
-          });
+          // Any other ML error - log but continue with default category
+          console.warn('ML validation error (non-blocking), using default category:', mlError.message);
         }
       } else {
-        // ML_API_URL not configured - reject the request
-        return res.status(500).json({
-          success: false,
-          message: 'Category detection service not configured.',
-          reason: 'ML_API_URL not configured'
-        });
+        // ML_API_URL not configured - use default category (non-blocking)
+        console.log('ML_API_URL not configured, using default category');
       }
 
       // ---------- IMAGE NORMALIZATION ----------
@@ -322,9 +333,8 @@ class IssueController {
       }
 
       // ---------- SAVE ISSUE ----------
-      // Map ML priority to valid enum values: ['low', 'medium', 'high', 'urgent']
-      let priority = mlResult.priority || mlResult.urgency || 'medium';
-      // Normalize priority values from ML backend
+      // Map priority to valid enum values: ['low', 'medium', 'high', 'urgent']
+      // Priority is already set above from ML result or default
       const priorityMap = {
         'normal': 'medium',
         'urgent': 'urgent',
@@ -332,14 +342,14 @@ class IssueController {
         'medium': 'medium',
         'low': 'low'
       };
-      priority = priorityMap[priority?.toLowerCase()] || 'medium';
+      const finalPriority = priorityMap[priority?.toLowerCase()] || 'medium';
       
       const issue = new Issue({
         title,
         description,
-        category, // Use ML-detected category
+        category, // Use ML-detected category or provided/default
         location,
-        priority,
+        priority: finalPriority,
         tags,
         isAnonymous,
         reportedBy: req.user._id,
