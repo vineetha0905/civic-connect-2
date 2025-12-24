@@ -54,7 +54,7 @@ class ApiService {
   // ================= ML VALIDATION =================
   // This method is now non-blocking - if ML backend is slow, it will timeout and return null
   // Increased timeout to 45 seconds to allow for Render cold starts
-  async validateReportWithML(payload, timeoutMs = 45000, retries = 2) {
+  async validateReportWithML(payload, imageFile = null, timeoutMs = 45000, retries = 2) {
     // Use a longer timeout (45 seconds) to allow for Render free tier cold starts
     // Retry logic with exponential backoff
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -70,10 +70,26 @@ class ApiService {
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
         try {
+          // Prepare multipart/form-data
+          const formData = new FormData();
+          formData.append('report_id', payload.report_id || `${Date.now()}`);
+          formData.append('description', payload.description || '');
+          if (payload.user_id) {
+            formData.append('user_id', payload.user_id);
+          }
+          if (payload.latitude !== undefined && payload.latitude !== null) {
+            formData.append('latitude', payload.latitude.toString());
+          }
+          if (payload.longitude !== undefined && payload.longitude !== null) {
+            formData.append('longitude', payload.longitude.toString());
+          }
+          if (imageFile) {
+            formData.append('image', imageFile);
+          }
+
           const fetchPromise = fetch(`${this.mlBaseURL}/submit`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: formData, // Don't set Content-Type header - browser will set it with boundary
             signal: controller.signal
           });
           
@@ -102,9 +118,24 @@ class ApiService {
           
           // If status is not ok, check if we should retry
           if (!response.ok) {
+            // Check if result contains an error status (even if HTTP status is 200)
+            if (result && result.status === 'error') {
+              console.error('ML backend processing error:', result.reason || 'Unknown error');
+              // If this is the last attempt, return null to skip ML validation
+              if (attempt === retries) return null;
+              continue; // Retry on next attempt
+            }
+            
             // Only reject if ML explicitly rejected the report
             if (result && result.status === 'rejected' && result.accept === false) {
               return result; // Return rejection so caller can handle it
+            }
+            // For 422 (validation errors), log the error details
+            if (response.status === 422) {
+              console.error('ML backend validation error:', result || responseText);
+              // If this is the last attempt, return null
+              if (attempt === retries) return null;
+              continue; // Retry on next attempt
             }
             // For 5xx errors, retry if we have attempts left
             if (response.status >= 500 && response.status < 600 && attempt < retries) {
@@ -112,8 +143,16 @@ class ApiService {
               continue;
             }
             // For other errors, just return null (skip ML validation)
-            console.warn('ML backend returned error, skipping validation:', result);
+            console.warn('ML backend returned error, skipping validation:', result || responseText);
             return null;
+          }
+          
+          // Check if result has error status even if HTTP status is 200
+          if (result && result.status === 'error') {
+            console.error('ML backend processing error:', result.reason || 'Unknown error');
+            // If this is the last attempt, return null to skip ML validation
+            if (attempt === retries) return null;
+            continue; // Retry on next attempt
           }
           
           // Success response (200) - return the result
@@ -281,6 +320,37 @@ class ApiService {
       `${this.baseURL}/employee/issues${queryString ? `?${queryString}` : ''}`,
       { headers: this.getAuthHeaders() }
     );
+    return this.handleResponse(response);
+  }
+
+  async resolveIssue(issueId, { imageFile, latitude, longitude }) {
+    // Prepare multipart/form-data
+    const formData = new FormData();
+    
+    if (imageFile) {
+      formData.append('image', imageFile);
+    }
+    
+    if (latitude) {
+      formData.append('latitude', latitude.toString());
+    }
+    
+    if (longitude) {
+      formData.append('longitude', longitude.toString());
+    }
+
+    // Get auth token for headers (but don't set Content-Type - browser will set it with boundary)
+    const token = localStorage.getItem('civicconnect_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/resolve`, {
+      method: 'PUT',
+      headers: headers,
+      body: formData
+    });
     return this.handleResponse(response);
   }
 

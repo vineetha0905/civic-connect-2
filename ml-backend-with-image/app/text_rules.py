@@ -144,14 +144,22 @@ CATEGORY_KEYWORDS = {
 
 
 # ------------------------------------
-# Category detection (IMPROVED)
+# Category detection (IMPROVED with confidence scoring)
 # ------------------------------------
-def detect_category(description: str) -> str:
+def detect_category(description: str) -> tuple[str, float]:
+    """
+    Detect category and return confidence score (0.0 to 1.0).
+    Returns: (category, confidence)
+    - confidence >= 0.8: High confidence
+    - confidence >= 0.5: Medium confidence
+    - confidence < 0.5: Low confidence
+    """
     text = normalize(description)
 
     best_category = "Other"
     max_score = 0
     max_keyword_length = 0
+    total_keywords_matched = 0
 
     for category, keywords in CATEGORY_KEYWORDS.items():
         matches = [kw for kw in keywords if contains(text, kw)]
@@ -160,15 +168,33 @@ def detect_category(description: str) -> str:
         if score > max_score:
             max_score = score
             best_category = category
-            max_keyword_length = max(len(kw) for kw in matches)
+            max_keyword_length = max(len(kw) for kw in matches) if matches else 0
+            total_keywords_matched = sum(len(kw) for kw in matches)
         elif score == max_score and score > 0:
             # Tie-breaker: more specific (longer phrase) wins
-            longest = max(len(kw) for kw in matches)
+            longest = max(len(kw) for kw in matches) if matches else 0
             if longest > max_keyword_length:
                 best_category = category
                 max_keyword_length = longest
+                total_keywords_matched = sum(len(kw) for kw in matches)
 
-    return best_category
+    # Calculate confidence: based on match score and keyword specificity
+    # Higher score + longer keywords = higher confidence
+    if max_score == 0:
+        confidence = 0.0
+    else:
+        # Base confidence from match count (normalized)
+        # More matches = higher confidence
+        base_confidence = min(max_score / 3.0, 1.0)  # 3+ matches = max base confidence
+        
+        # Boost for specific keywords (longer = more specific)
+        # Normalize by average keyword length in best category
+        avg_keyword_length = sum(len(kw) for kw in CATEGORY_KEYWORDS.get(best_category, [])) / max(len(CATEGORY_KEYWORDS.get(best_category, [])), 1)
+        specificity_boost = min(max_keyword_length / (avg_keyword_length * 2), 0.3) if avg_keyword_length > 0 else 0
+        
+        confidence = min(base_confidence + specificity_boost, 1.0)
+
+    return (best_category, confidence)
 
 
 # ------------------------------------

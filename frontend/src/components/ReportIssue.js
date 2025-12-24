@@ -183,18 +183,6 @@ const ReportIssue = ({ user }) => {
     let issueData = null; // Declare issueData in the outer scope
 
     try {
-      let imageUrl = null;
-      
-      // Upload image if selected
-      if (selectedFile) {
-        const uploadResponse = await apiService.uploadImage(selectedFile);
-        // Support both our backend shape { success, data: { url, publicId } }
-        // and any direct shape { url, secure_url, public_id }
-        const uploaded = uploadResponse?.data || uploadResponse || {};
-        imageUrl = uploaded.url || uploaded.secure_url || null;
-        var uploadedPublicId = uploaded.publicId || uploaded.public_id || null;
-      }
-
       // Validate required fields
       if (!reportData.coordinates || !reportData.coordinates[0] || !reportData.coordinates[1]) {
         toast.error('Please get your location first');
@@ -215,6 +203,59 @@ const ReportIssue = ({ user }) => {
         return;
       }
 
+      // Debug: Log the data being sent
+      console.log('User data:', user);
+      
+      // 1) Validate with ML backend first (category will be auto-detected)
+      // Send image file directly to ML backend (NOT uploaded to Cloudinary yet)
+      const mlPayload = {
+        report_id: `${Date.now()}`,
+        description: reportData.description,
+        user_id: user?._id || user?.id || 'anon',
+        latitude: reportData.coordinates[0],
+        longitude: reportData.coordinates[1]
+      };
+
+      // ML validation is now completely non-blocking with 45 second timeout and retries
+      // If it times out or fails after retries, we proceed with default category
+      let mlResult = null;
+      try {
+        // 45 second timeout with 2 retries to handle Render cold starts
+        // Pass selectedFile directly to ML backend
+        mlResult = await apiService.validateReportWithML(mlPayload, selectedFile, 45000, 2);
+        console.log('ML validation result:', mlResult);
+      } catch (mlError) {
+        // This should rarely happen now since validateReportWithML returns null instead of throwing
+        console.warn('ML validation error (non-blocking):', mlError.message);
+        mlResult = null;
+      }
+      
+      // Only check for explicit rejections from ML backend
+      if (mlResult && mlResult.accept === false && mlResult.status === 'rejected') {
+        setIsSubmitting(false);
+        const reason = mlResult.reason || 'Report rejected by validator';
+        toast.error(`Report rejected: ${reason}`);
+        return;
+      }
+      
+      // 2) Upload image to Cloudinary ONLY IF ML accepted the report
+      let imageUrl = null;
+      let uploadedPublicId = null;
+      
+      if (selectedFile && mlResult && mlResult.accept === true) {
+        try {
+          const uploadResponse = await apiService.uploadImage(selectedFile);
+          // Support both our backend shape { success, data: { url, publicId } }
+          // and any direct shape { url, secure_url, public_id }
+          const uploaded = uploadResponse?.data || uploadResponse || {};
+          imageUrl = uploaded.url || uploaded.secure_url || null;
+          uploadedPublicId = uploaded.publicId || uploaded.public_id || null;
+        } catch (uploadError) {
+          console.warn('Image upload failed, continuing without image:', uploadError);
+          // Continue without image if upload fails
+        }
+      }
+
       // Prepare issue data (category will be auto-detected by ML backend)
       issueData = {
         title: reportData.title,
@@ -233,43 +274,6 @@ const ReportIssue = ({ user }) => {
         }] : []
       };
 
-      // Debug: Log the data being sent
-      console.log('Sending issue data:', issueData);
-      console.log('Location object:', issueData.location);
-      console.log('Coordinates:', issueData.location.coordinates);
-      console.log('User data:', user);
-      
-      // 1) Validate with ML backend first (category will be auto-detected)
-      const mlPayload = {
-        report_id: `${Date.now()}`,
-        description: reportData.description,
-        user_id: user?._id || user?.id || 'anon',
-        image_url: imageUrl || null,
-        latitude: reportData.coordinates[0],
-        longitude: reportData.coordinates[1]
-      };
-
-      // ML validation is now completely non-blocking with 45 second timeout and retries
-      // If it times out or fails after retries, we proceed with default category
-      let mlResult = null;
-      try {
-        // 45 second timeout with 2 retries to handle Render cold starts
-        mlResult = await apiService.validateReportWithML(mlPayload, 45000, 2);
-        console.log('ML validation result:', mlResult);
-      } catch (mlError) {
-        // This should rarely happen now since validateReportWithML returns null instead of throwing
-        console.warn('ML validation error (non-blocking):', mlError.message);
-        mlResult = null;
-      }
-      
-      // Only check for explicit rejections from ML backend
-      if (mlResult && mlResult.accept === false && mlResult.status === 'rejected') {
-        setIsSubmitting(false);
-        const reason = mlResult.reason || 'Report rejected by validator';
-        toast.error(`Report rejected: ${reason}`);
-        return;
-      }
-      
       // Use ML-detected category if available, otherwise use default
       if (mlResult && mlResult.category) {
         issueData.category = mlResult.category;
@@ -285,7 +289,6 @@ const ReportIssue = ({ user }) => {
         }
       }
 
-      // 2) Submit to backend only if accepted
       // Optionally map ML priority to backend priority if provided
       if (mlResult && mlResult.priority) {
         issueData.priority = mlResult.priority === 'urgent' ? 'urgent' : 'medium';
@@ -296,6 +299,7 @@ const ReportIssue = ({ user }) => {
         issueData.priority = 'medium'; // Default priority
       }
 
+      // 3) Submit to backend only if accepted
       const response = await apiService.createIssue(issueData);
       
       setIsSubmitting(false);
