@@ -434,6 +434,14 @@ class AdminController {
       const { id } = req.params;
       const { status, reason } = req.body;
 
+      // Admin CANNOT resolve issues - only employees can resolve
+      if (status === 'resolved') {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin cannot resolve issues. Only assigned employees can resolve issues.'
+        });
+      }
+
       const issue = await Issue.findById(id);
       if (!issue) {
         return res.status(404).json({
@@ -443,16 +451,9 @@ class AdminController {
       }
 
       const oldStatus = issue.status;
+      
+      // For non-resolved status updates, proceed normally
       issue.status = status;
-
-      if (status === 'resolved') {
-        issue.resolvedAt = new Date();
-        if (issue.createdAt) {
-          issue.actualResolutionTime = Math.floor(
-            (issue.resolvedAt - issue.createdAt) / (1000 * 60 * 60 * 24)
-          );
-        }
-      }
 
       await issue.save();
 

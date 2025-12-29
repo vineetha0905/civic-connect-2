@@ -142,6 +142,79 @@ class IssueController {
   }
 
   // ===============================
+  // GET LEADERBOARD
+  // ===============================
+  async getLeaderboard(req, res) {
+    try {
+      const limit = parseInt(req.query.limit) || 10;
+      const currentUserId = req.user?._id?.toString();
+      
+      // Get top users by points (citizens only)
+      // Ensure points field is treated as 0 if null/undefined, and sort by points descending
+      const topUsers = await User.find({ 
+        role: 'citizen',
+        name: { $exists: true, $ne: null }
+      })
+        .select('name points')
+        .sort({ points: -1 })
+        .limit(limit)
+        .lean();
+      
+      // Calculate current user's rank and get their data
+      let currentUserData = null;
+      if (currentUserId) {
+        const currentUser = await User.findById(currentUserId)
+          .select('name points')
+          .lean();
+        
+        if (currentUser) {
+          // Count how many users have more points than current user
+          const usersAbove = await User.countDocuments({
+            role: 'citizen',
+            points: { $gt: currentUser.points || 0 }
+          });
+          const userRank = usersAbove + 1;
+          
+          currentUserData = {
+            rank: userRank,
+            name: currentUser.name,
+            points: currentUser.points || 0,
+            isCurrentUser: true
+          };
+        }
+      }
+      
+      // Format response with rank - show ONLY top 10
+      // Ensure points are treated as 0 if null/undefined
+      const formatted = topUsers.map((user, index) => {
+        const userRank = index + 1;
+        const userPoints = (user.points !== null && user.points !== undefined) ? user.points : 0;
+        return {
+          rank: userRank,
+          name: user.name || 'Unknown',
+          points: userPoints,
+          isCurrentUser: currentUserId && user._id.toString() === currentUserId
+        };
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          leaderboard: formatted,
+          currentUser: currentUserData
+        }
+      });
+    } catch (error) {
+      console.error('Get leaderboard error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error fetching leaderboard',
+        error: error.message
+      });
+    }
+  }
+
+  // ===============================
   // GET ISSUES FOR A SPECIFIC USER
   // ===============================
   async getUserIssues(req, res) {
@@ -274,6 +347,23 @@ class IssueController {
               // Only reject if ML explicitly rejects the report
               if (mlResult && mlResult.accept === false && mlResult.status === 'rejected') {
                 const reason = mlResult.reason || 'Report rejected by validator';
+                
+                // Deduct points from user for rejected report (only if not already deducted for this report)
+                if (req.user && req.user._id) {
+                  try {
+                    const reporter = await User.findById(req.user._id);
+                    if (reporter) {
+                      const currentPoints = reporter.points || 0;
+                      reporter.points = Math.max(0, currentPoints - 5);
+                      await reporter.save();
+                      console.log(`Deducted -5 points from user ${reporter._id} for rejected report. New total: ${reporter.points}`);
+                    }
+                  } catch (pointsError) {
+                    console.error('Error deducting points:', pointsError);
+                    // Continue with rejection even if points update fails
+                  }
+                }
+                
                 return res.status(400).json({
                   success: false,
                   message: reason,

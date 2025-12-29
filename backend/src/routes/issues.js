@@ -48,6 +48,12 @@ router.get(
   safe(issueController.getIssueStats)
 );
 
+router.get(
+  '/leaderboard',
+  optionalAuth,
+  safe(issueController.getLeaderboard)
+);
+
 /* ===============================
    PROTECTED ROUTES
 ================================ */

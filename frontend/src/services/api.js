@@ -306,6 +306,13 @@ class ApiService {
     return this.handleResponse(response);
   }
 
+  async getLeaderboard() {
+    const response = await fetch(`${this.baseURL}/issues/leaderboard`, {
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
   async getUserIssues(userId) {
     const response = await fetch(`${this.baseURL}/issues/user/${userId}`, {
       headers: this.getAuthHeaders()

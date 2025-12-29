@@ -275,6 +275,52 @@ class EmployeeController {
         };
       }
 
+      const oldStatus = issue.status;
+      
+      // If transitioning to resolved, award points and delete (don't save issue)
+      if (oldStatus !== 'resolved') {
+        // Award points first
+        if (issue.reportedBy && !issue.pointsAwarded) {
+          try {
+            const User = require('../models/User');
+            const reporter = await User.findById(issue.reportedBy);
+            if (reporter) {
+              const currentPoints = reporter.points || 0;
+              reporter.points = currentPoints + 10;
+              await reporter.save();
+              issue.pointsAwarded = true;
+              console.log(`Awarded +10 points to user ${reporter._id} for resolved issue ${issue._id}. New total: ${reporter.points}`);
+            }
+          } catch (pointsError) {
+            console.error('Error awarding points:', pointsError);
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to award points',
+              error: pointsError.message
+            });
+          }
+        }
+        
+        // Delete issue immediately (don't save it first)
+        try {
+          await issue.deleteOne();
+          console.log(`Issue ${issue._id} deleted after resolution`);
+          return res.json({ 
+            success: true, 
+            message: 'Issue resolved and deleted successfully', 
+            data: { deleted: true } 
+          });
+        } catch (deleteError) {
+          console.error('Error deleting resolved issue:', deleteError);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to delete resolved issue',
+            error: deleteError.message
+          });
+        }
+      }
+      
+      // If already resolved, proceed with normal update
       issue.resolvedAt = new Date();
       issue.status = 'resolved';
       issue.resolved = issue.resolved || {};
@@ -287,7 +333,7 @@ class EmployeeController {
 
       await notificationService.notifyIssueResolved(issue, req.user);
 
-      res.json({ success: true, message: 'Issue resolved', data: { issue } });
+      return res.json({ success: true, message: 'Issue resolved', data: { issue } });
     } catch (error) {
       console.error('Resolve issue error:', error);
       res.status(500).json({ success: false, message: 'Server error', error: error.message });

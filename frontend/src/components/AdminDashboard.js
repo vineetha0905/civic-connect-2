@@ -141,6 +141,9 @@ const AdminDashboard = ({ user }) => {
     try {
       await apiService.updateIssueStatus(issueId, { status: newStatus });
       toast.success('Status updated');
+      // Refresh dashboard after status update
+      const fresh = await apiService.getAdminDashboard();
+      setStats(fresh.data || fresh);
     } catch (err) {
       toast.error(`Update failed: ${err.message}`);
     }
@@ -341,15 +344,7 @@ const AdminDashboard = ({ user }) => {
                             Assign
                           </button>
                         )}
-                        {issue.status === 'in-progress' && (
-                          <button 
-                            className="btn-primary"
-                            style={{ fontSize: '0.7rem', padding: '0.3rem 0.8rem' }}
-                            onClick={(e) => handleUpdateStatus(issue._id || issue.id, 'resolved', e)}
-                          >
-                            Mark Resolved
-                          </button>
-                        )}
+                        {/* Admin can only assign issues, not resolve them */}
                       </div>
                     </div>
                   </div>
@@ -518,15 +513,7 @@ const AdminDashboard = ({ user }) => {
                               Assign
                             </button>
                           )}
-                          {issue.status === 'in-progress' && (
-                            <button 
-                              className="btn-primary"
-                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
-                              onClick={(e) => handleUpdateStatus(issue._id || issue.id, 'resolved', e)}
-                            >
-                              Resolve
-                            </button>
-                          )}
+                          {/* Admin can only assign issues, not resolve them */}
                         </div>
                       </td>
                     </tr>

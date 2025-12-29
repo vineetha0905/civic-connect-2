@@ -225,7 +225,11 @@ const issueSchema = new mongoose.Schema({
     },
     reason: String,
     comment: String
-  }]
+  }],
+  pointsAwarded: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });
