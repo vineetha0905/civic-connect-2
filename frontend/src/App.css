@@ -725,6 +725,23 @@ body {
   
   .dashboard-subtitle {
     font-size: 0.9rem;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 0.9 !important;
+  }
+  
+  .dashboard-header {
+    padding: 2rem 1rem 4rem !important;
+  }
+  
+  .dashboard-header > div > div {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.5rem;
+  }
+  
+  .dashboard-header > div > div > div:first-child {
+    width: 100%;
   }
   
   .dashboard-actions {
@@ -829,6 +846,22 @@ body {
     width: 100%;
     text-align: center;
   }
+  
+  /* Report Issue - Full width inputs on mobile */
+  .form-group .form-row-inline input[type="text"],
+  .form-group .form-row-inline textarea {
+    width: 100% !important;
+    flex: none !important;
+  }
+  
+  /* GPS button centering on mobile - apply to all buttons in form-row-inline */
+  .form-group .form-row-inline .btn-secondary {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
 
   .issues-grid {
     grid-template-columns: 1fr;
@@ -847,13 +880,240 @@ body {
     gap: 0.75rem;
   }
   
+  .admin-header > div {
+    width: 100%;
+  }
+  
+  .admin-header > div > div:last-child {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .admin-container {
+    overflow-x: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
   .admin-content {
     padding: 1rem 0.75rem;
+    overflow-y: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Navigation tabs scroll on mobile */
+  .admin-content > div:first-child {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+  }
+  
+  .admin-content > div:first-child > button {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   
   .stats-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+  
+  /* Search and filter section scroll on mobile - only for search/filter container */
+  /* Target div containing input with placeholder "Search issues..." */
+  .admin-content div:has(input[placeholder="Search issues..."]) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+    padding-bottom: 0.5rem;
+  }
+  
+  .admin-content div:has(input[placeholder="Search issues..."]) > div {
+    flex-shrink: 0;
+    min-width: fit-content;
+  }
+  
+  .admin-content div:has(input[placeholder="Search issues..."]) input,
+  .admin-content div:has(input[placeholder="Search issues..."]) select {
+    flex-shrink: 0;
+  }
+  
+  /* Issues table scroll and fix overlapping on mobile */
+  .admin-content > div:has(table) {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  
+  .admin-content > div:has(table) > table {
+    min-width: 800px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .admin-content > div:has(table) table th,
+  .admin-content > div:has(table) table td {
+    white-space: nowrap;
+    min-width: 120px;
+    padding: 0.8rem;
+  }
+  
+  .admin-content > div:has(table) table th:first-child,
+  .admin-content > div:has(table) table td:first-child {
+    min-width: 150px;
+    white-space: normal;
+  }
+  
+  .admin-content > div:has(table) table th:last-child,
+  .admin-content > div:has(table) table td:last-child {
+    min-width: 100px;
+  }
+  
+  /* Analytics Charts - FORCE single column layout on mobile */
+  .admin-content > div > div[style*="display: grid"],
+  .admin-content > div > div[style*="gridTemplateColumns"],
+  .admin-content div[style*="display: grid"][style*="gridTemplateColumns"],
+  .admin-content div[style*="gridTemplateColumns"] {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Analytics chart cards - FULL WIDTH - centered - force single column */
+  .admin-content > div > div[style*="display: grid"] > div,
+  .admin-content div[style*="gridTemplateColumns"] > div,
+  .admin-content div[style*="display: grid"] > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 1rem !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    display: block !important;
+    flex: none !important;
+    grid-column: span 1 !important;
+    position: relative !important;
+  }
+  
+  /* Performance Summary and SLA - remove span 2 on mobile */
+  .admin-content div[style*="gridColumn"] {
+    grid-column: span 1 !important;
+  }
+  
+  /* Chart containers - CENTERED and FULL WIDTH - CRITICAL */
+  .admin-content .recharts-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+  }
+  
+  .admin-content .recharts-responsive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+    height: 300px !important;
+    min-height: 300px !important;
+    max-height: 300px !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    display: block !important;
+  }
+  
+  /* PieChart SVG - CENTERED and FULL VISIBILITY */
+  .admin-content .recharts-surface {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    margin: 0 auto !important;
+    display: block !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+  }
+  
+  /* ALL SVG charts - ensure centered and full width */
+  .admin-content svg.recharts-surface {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
+    margin: 0 auto !important;
+  }
+  
+  /* Recharts layer - ensure proper positioning */
+  .admin-content .recharts-layer {
+    transform-origin: center center !important;
+  }
+  
+  /* Pie chart - ensure centered */
+  .admin-content .recharts-pie {
+    transform-origin: center center !important;
+  }
+  
+  /* Recharts legend and labels - ensure centered and visible */
+  .admin-content .recharts-legend-wrapper {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 1rem auto 0 auto !important;
+    padding: 0 !important;
+  }
+  
+  .admin-content .recharts-legend-item {
+    margin: 0.25rem 0.5rem !important;
+  }
+  
+  .admin-content .recharts-text.recharts-pie-label-text {
+    font-size: 0.75rem !important;
+    fill: #333 !important;
+  }
+  
+  .admin-content .recharts-pie-sector {
+    stroke-width: 1px !important;
+    stroke: #fff !important;
+  }
+  
+  /* Chart axes - ensure visibility */
+  .admin-content .recharts-cartesian-axis {
+    display: block !important;
+  }
+  
+  /* Tooltip - ensure visibility */
+  .admin-content .recharts-tooltip-wrapper {
+    z-index: 100 !important;
+  }
+  
+  
+  /* Summary stats grid - single column on mobile */
+  .admin-content div[style*="display: grid"] > div > div[style*="display: grid"],
+  .admin-content div[style*="gridTemplateColumns"] > div > div[style*="display: grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
   }
 
   /* Map Responsive */
@@ -898,6 +1158,41 @@ body {
   
   .map-wrapper {
     height: 280px !important;
+  }
+  
+  /* Employee Dashboard - Header fixes for mobile */
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b > div > div.flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b > div > div > div.flex.items-center.gap-3 {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+  
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b > div > div > div > div.flex.items-center:first-child h1 {
+    font-size: 1.1rem;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  /* Employee Dashboard - Ensure profile and logout buttons are visible */
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b button[title="Profile"],
+  .min-h-screen.bg-gray-50 > div.bg-white.border-b button[title="Logout"] {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    flex-shrink: 0;
   }
 }
 
@@ -998,6 +1293,45 @@ body {
   
   .map-container {
     height: 250px;
+  }
+}
+
+
+/* Employee Dashboard Mobile Fixes - Using structure-based selectors */
+@media (max-width: 768px) {
+  /* Target Employee Dashboard header structure */
+  .min-h-screen.bg-gray-50 > .bg-white.border-b.border-gray-200.sticky {
+    padding: 0.75rem 1rem !important;
+  }
+  
+  .min-h-screen.bg-gray-50 > .bg-white.border-b.border-gray-200.sticky > div > div.flex.items-center.justify-between {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+  
+  .min-h-screen.bg-gray-50 > .bg-white.border-b.border-gray-200.sticky > div > div > div.flex.items-center.gap-3 {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+    margin-top: 0.5rem !important;
+  }
+  
+  .min-h-screen.bg-gray-50 > .bg-white.border-b.border-gray-200.sticky > div > div > div > div.flex.items-center:first-child h1 {
+    font-size: 1rem !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+  
+  /* Ensure profile and logout buttons are visible and accessible */
+  .min-h-screen.bg-gray-50 button[title="Profile"],
+  .min-h-screen.bg-gray-50 button[title="Logout"] {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    flex-shrink: 0 !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
   }
 }
 
