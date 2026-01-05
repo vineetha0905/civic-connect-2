@@ -273,51 +273,53 @@ const CitizenDashboard = ({ user, setUser }) => {
 
       {/* Map Section */}
       <div className="px-4 sm:px-6 md:px-8 mt-6 sm:mt-8 max-w-full box-border">
-        <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-4">
-          Issues Near You
-        </h3>
-        {geoStatus !== 'granted' && (
-          <div className="bg-[#fff7ed] border border-[#fed7aa] text-[#9a3412] p-3 sm:p-4 rounded-lg mb-3 w-full box-border">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm flex-1">
-                {geoStatus === 'requesting' ? 'Requesting your location…' :
-                 geoStatus === 'denied' ? 'Location permission denied. Please allow access to show nearby issues.' :
-                 geoStatus === 'error' ? (geoError || 'Unable to determine your location.') :
-                 'We use your location to show nearby issues.'}
-              </span>
-              <button 
-                onClick={requestLocation} 
-                className="bg-[#fb923c] hover:bg-[#f97316] text-white border-none px-3 py-2 sm:px-4 sm:py-2.5 rounded-md cursor-pointer text-xs sm:text-sm whitespace-nowrap transition-colors"
-              >
-                Use my location
-              </button>
-            </div>
-            {geoStatus === 'denied' && (
-              <div className="mt-2 text-xs sm:text-sm">
-                Tip: In your browser address bar, click the location icon and allow access for this site.
+        <div>
+          <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-4">
+            Issues Near You
+          </h3>
+          {geoStatus !== 'granted' && (
+            <div className="bg-[#fff7ed] border border-[#fed7aa] text-[#9a3412] p-3 sm:p-4 rounded-lg mb-3 w-full box-border">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-3">
+                <span className="text-xs sm:text-sm flex-1">
+                  {geoStatus === 'requesting' ? 'Requesting your location…' :
+                   geoStatus === 'denied' ? 'Location permission denied. Please allow access to show nearby issues.' :
+                   geoStatus === 'error' ? (geoError || 'Unable to determine your location.') :
+                   'We use your location to show nearby issues.'}
+                </span>
+                <button 
+                  onClick={requestLocation} 
+                  className="bg-[#fb923c] hover:bg-[#f97316] text-white border-none px-3 py-2 sm:px-4 sm:py-2.5 rounded-md cursor-pointer text-xs sm:text-sm whitespace-nowrap transition-colors"
+                >
+                  Use my location
+                </button>
               </div>
-            )}
+              {geoStatus === 'denied' && (
+                <div className="mt-2 text-xs sm:text-sm">
+                  Tip: In your browser address bar, click the location icon and allow access for this site.
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 w-full">
+            <span className="text-gray-600 text-xs sm:text-sm whitespace-nowrap">
+              Radius: {radiusKm} km
+            </span>
+            <input 
+              type="range" 
+              min="1" 
+              max="20" 
+              step="1" 
+              value={radiusKm} 
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              className="flex-1 min-w-0 w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#1e4359]"
+            />
+            <span className="text-gray-600 text-xs sm:text-sm whitespace-nowrap">
+              {issues.length} issues
+            </span>
           </div>
-        )}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 w-full">
-          <span className="text-gray-600 text-xs sm:text-sm whitespace-nowrap">
-            Radius: {radiusKm} km
-          </span>
-          <input 
-            type="range" 
-            min="1" 
-            max="20" 
-            step="1" 
-            value={radiusKm} 
-            onChange={(e) => setRadiusKm(Number(e.target.value))}
-            className="flex-1 min-w-0 w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#1e4359]"
-          />
-          <span className="text-gray-600 text-xs sm:text-sm whitespace-nowrap">
-            {issues.length} issues
-          </span>
-        </div>
-        <div className="w-full h-[280px] sm:h-[350px] md:h-[400px] rounded-xl overflow-hidden shadow-sm">
-          <IssueMap issues={issues} center={userCenter || [16.0716, 77.9053]} />
+          <div className="w-full h-[280px] sm:h-[350px] md:h-[400px] rounded-xl overflow-hidden shadow-sm">
+            <IssueMap issues={issues} center={userCenter || [16.0716, 77.9053]} />
+          </div>
         </div>
       </div>
 

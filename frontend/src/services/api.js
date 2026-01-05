@@ -118,39 +118,8 @@ class ApiService {
           
           // If status is not ok, check if we should retry
           if (!response.ok) {
-            // Check if result contains an error status (even if HTTP status is 200)
-            if (result && result.status === 'error') {
-              console.error('ML backend processing error:', result.reason || 'Unknown error');
-              // If this is the last attempt, return null to skip ML validation
-              if (attempt === retries) return null;
-              continue; // Retry on next attempt
-            }
-            
-            // Only reject if ML explicitly rejected the report
-            if (result && result.status === 'rejected' && result.accept === false) {
-              return result; // Return rejection so caller can handle it
-            }
-            // For 422 (validation errors), log the error details
-            if (response.status === 422) {
-              console.error('ML backend validation error:', result || responseText);
-              // If this is the last attempt, return null
-              if (attempt === retries) return null;
-              continue; // Retry on next attempt
-            }
-            // For 5xx errors, retry if we have attempts left
-            if (response.status >= 500 && response.status < 600 && attempt < retries) {
-              console.warn(`ML backend returned ${response.status}, retrying...`);
-              continue;
-            }
-            // For other errors, just return null (skip ML validation)
-            console.warn('ML backend returned error, skipping validation:', result || responseText);
-            return null;
-          }
-          
-          // Check if result has error status even if HTTP status is 200
-          if (result && result.status === 'error') {
-            console.error('ML backend processing error:', result.reason || 'Unknown error');
-            // If this is the last attempt, return null to skip ML validation
+            console.warn(`ML backend returned status ${response.status}:`, result);
+            // If this is the last attempt, return null (non-blocking)
             if (attempt === retries) return null;
             continue; // Retry on next attempt
           }
@@ -160,7 +129,7 @@ class ApiService {
           return result;
         } catch (fetchError) {
           clearTimeout(timeoutId);
-          
+      
           // For timeout or network errors, retry if we have attempts left
           if ((fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError' || 
               fetchError.message === 'TIMEOUT' ||
@@ -209,6 +178,33 @@ class ApiService {
     return this.handleResponse(response);
   }
 
+  async sendOtpByMobile(mobile) {
+    const response = await fetch(`${this.baseURL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile })
+    });
+    return this.handleResponse(response);
+  }
+
+  async sendOtpByEmail(email) {
+    const response = await fetch(`${this.baseURL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    return this.handleResponse(response);
+  }
+
+  async verifyOtp(mobile, email, otp) {
+    const response = await fetch(`${this.baseURL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, email, otp })
+    });
+    return this.handleResponse(response);
+  }
+
   async verifyOtpByAadhaar(aadhaarNumber, otp) {
     const response = await fetch(`${this.baseURL}/auth/verify-otp`, {
       method: 'POST',
@@ -218,58 +214,70 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  async verifyOtp(mobile, otp) {
-    const response = await fetch(`${this.baseURL}/auth/verify-otp`, {
+  async resendOtp(mobile, email) {
+    const response = await fetch(`${this.baseURL}/auth/resend-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile, otp })
+      body: JSON.stringify({ mobile, email })
     });
     return this.handleResponse(response);
   }
 
-  async guestLogin(name) {
-    const response = await fetch(`${this.baseURL}/auth/guest`, {
+  async login(mobile, email, password) {
+    const response = await fetch(`${this.baseURL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ mobile, email, password })
     });
     return this.handleResponse(response);
   }
 
-  async registerUser({ name, aadhaarNumber, mobile, address }) {
+  async register(userData) {
     const response = await fetch(`${this.baseURL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, aadhaarNumber, mobile, address })
+      body: JSON.stringify(userData)
     });
     return this.handleResponse(response);
   }
 
-  async adminLogin(username, password) {
+  async guestLogin() {
+    const response = await fetch(`${this.baseURL}/auth/guest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return this.handleResponse(response);
+  }
+
+  async adminLogin(credentials) {
     const response = await fetch(`${this.baseURL}/auth/admin-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify(credentials)
     });
     return this.handleResponse(response);
   }
 
-  async employeeLogin({ employeeId, password, department }) {
+  async employeeLogin(credentials) {
     const response = await fetch(`${this.baseURL}/auth/employee-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId, password, department })
+      body: JSON.stringify(credentials)
     });
     return this.handleResponse(response);
+  }
+
+  async logout() {
+    localStorage.removeItem('civicconnect_token');
+    localStorage.removeItem('civicconnect_user');
   }
 
   // ================= ISSUES =================
   async getIssues(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    const response = await fetch(
-      `${this.baseURL}/issues${queryString ? `?${queryString}` : ''}`,
-      { headers: this.getAuthHeaders() }
-    );
+    const response = await fetch(`${this.baseURL}/issues${queryString ? `?${queryString}` : ''}`, {
+      headers: this.getAuthHeaders()
+    });
     return this.handleResponse(response);
   }
 
@@ -289,11 +297,11 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  async updateIssue(id, updateData) {
+  async updateIssue(id, issueData) {
     const response = await fetch(`${this.baseURL}/issues/${id}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(updateData)
+      body: JSON.stringify(issueData)
     });
     return this.handleResponse(response);
   }
@@ -306,77 +314,6 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  async closeIssue(id) {
-    const response = await fetch(`${this.baseURL}/issues/${id}/close`, {
-      method: 'PUT',
-      headers: this.getAuthHeaders()
-    });
-    return this.handleResponse(response);
-  }
-
-  async getLeaderboard() {
-    const response = await fetch(`${this.baseURL}/issues/leaderboard`, {
-      headers: this.getAuthHeaders()
-    });
-    return this.handleResponse(response);
-  }
-
-  async getUserIssues(userId) {
-    const response = await fetch(`${this.baseURL}/issues/user/${userId}`, {
-      headers: this.getAuthHeaders()
-    });
-    return this.handleResponse(response);
-  }
-
-  // ================= EMPLOYEE =================
-  async getEmployeeIssues(params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const response = await fetch(
-      `${this.baseURL}/employee/issues${queryString ? `?${queryString}` : ''}`,
-      { headers: this.getAuthHeaders() }
-    );
-    return this.handleResponse(response);
-  }
-
-  async acceptIssue(issueId) {
-    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/accept`, {
-      method: 'POST',
-      headers: this.getAuthHeaders()
-    });
-    return this.handleResponse(response);
-  }
-
-  async resolveIssue(issueId, { imageFile, latitude, longitude }) {
-    // Prepare multipart/form-data
-    const formData = new FormData();
-    
-    if (imageFile) {
-      formData.append('image', imageFile);
-    }
-    
-    if (latitude) {
-      formData.append('latitude', latitude.toString());
-    }
-    
-    if (longitude) {
-      formData.append('longitude', longitude.toString());
-    }
-
-    // Get auth token for headers (but don't set Content-Type - browser will set it with boundary)
-    const token = localStorage.getItem('civicconnect_token');
-    const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/resolve`, {
-      method: 'PUT',
-      headers: headers,
-      body: formData
-    });
-    return this.handleResponse(response);
-  }
-
   async upvoteIssue(id) {
     const response = await fetch(`${this.baseURL}/issues/${id}/upvote`, {
       method: 'POST',
@@ -385,10 +322,33 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  async removeUpvote(id) {
-    const response = await fetch(`${this.baseURL}/issues/${id}/upvote`, {
-      method: 'DELETE',
+  async getNearbyIssues(latitude, longitude, radius = 5000) {
+    const response = await fetch(
+      `${this.baseURL}/issues/nearby?latitude=${latitude}&longitude=${longitude}&radius=${radius}`,
+      {
+        headers: this.getAuthHeaders()
+      }
+    );
+    return this.handleResponse(response);
+  }
+
+  async getUserIssues(userId) {
+    return this.getIssues({ userId });
+  }
+
+  // ================= COMMENTS =================
+  async getComments(issueId) {
+    const response = await fetch(`${this.baseURL}/issues/${issueId}/comments`, {
       headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async addComment(issueId, comment) {
+    const response = await fetch(`${this.baseURL}/issues/${issueId}/comments`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ text: comment })
     });
     return this.handleResponse(response);
   }
@@ -401,90 +361,131 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-   async getAdminAnalytics() {
-     const response = await fetch(`${this.baseURL}/admin/analytics`, {
-       headers: this.getAuthHeaders()
-     });
-     return this.handleResponse(response);
-   }
+  async getAdminAnalytics() {
+    const response = await fetch(`${this.baseURL}/admin/analytics`, {
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
 
-  async assignIssue(issueId, body = {}) {
+  async assignIssue(issueId, employeeId) {
     const response = await fetch(`${this.baseURL}/admin/issues/${issueId}/assign`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(body)
+      body: JSON.stringify({ employeeId })
     });
     return this.handleResponse(response);
   }
 
-  async updateIssueStatus(issueId, body) {
+  async updateIssueStatus(issueId, status) {
     const response = await fetch(`${this.baseURL}/admin/issues/${issueId}/status`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(body)
+      body: JSON.stringify({ status })
     });
     return this.handleResponse(response);
   }
 
-  // Employee Management
-  async createEmployee(employeeData) {
-    const response = await fetch(`${this.baseURL}/admin/employees`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(employeeData)
-    });
-    return this.handleResponse(response);
-  }
-
-  async getEmployees(params = {}) {
-    const queryParams = new URLSearchParams(params).toString();
-    const response = await fetch(`${this.baseURL}/admin/employees?${queryParams}`, {
+  async getAllUsers() {
+    const response = await fetch(`${this.baseURL}/admin/users`, {
       headers: this.getAuthHeaders()
     });
     return this.handleResponse(response);
   }
 
-  async updateEmployee(employeeId, employeeData) {
-    const response = await fetch(`${this.baseURL}/admin/employees/${employeeId}`, {
+  async updateUserStatus(userId, status) {
+    const response = await fetch(`${this.baseURL}/admin/users/${userId}/status`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(employeeData)
+      body: JSON.stringify({ status })
     });
     return this.handleResponse(response);
   }
 
-  async deleteEmployee(employeeId) {
-    const response = await fetch(`${this.baseURL}/admin/employees/${employeeId}`, {
-      method: 'DELETE',
+  // ================= EMPLOYEE =================
+  async getEmployeeIssues(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await fetch(`${this.baseURL}/employee/issues${queryString ? `?${queryString}` : ''}`, {
       headers: this.getAuthHeaders()
     });
     return this.handleResponse(response);
   }
 
-  // ================= COMMENTS =================
-  async getComments(issueId) {
-    const response = await fetch(`${this.baseURL}/issues/${issueId}/comments`, {
-      headers: this.getAuthHeaders()
-    });
-    return this.handleResponse(response);
-  }
-
-  async addComment(issueId, commentData) {
-    const response = await fetch(`${this.baseURL}/issues/${issueId}/comments`, {
+  async acceptIssue(issueId) {
+    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/accept`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(commentData)
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async resolveIssue(issueId, resolvedData) {
+    const formData = new FormData();
+    if (resolvedData.latitude !== undefined) {
+      formData.append('latitude', resolvedData.latitude.toString());
+    }
+    if (resolvedData.longitude !== undefined) {
+      formData.append('longitude', resolvedData.longitude.toString());
+    }
+    if (resolvedData.photo) {
+      formData.append('photo', resolvedData.photo);
+    }
+
+    const headers = {};
+    const token = localStorage.getItem('civicconnect_token');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/resolve`, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    return this.handleResponse(response);
+  }
+
+  // ================= NOTIFICATIONS =================
+  async getNotifications() {
+    const response = await fetch(`${this.baseURL}/notifications`, {
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async markNotificationRead(notificationId) {
+    const response = await fetch(`${this.baseURL}/notifications/${notificationId}/read`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
+  async markAllNotificationsRead() {
+    const response = await fetch(`${this.baseURL}/notifications/read-all`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders()
     });
     return this.handleResponse(response);
   }
 
   // ================= PROFILE =================
+  async updateProfile(profileData) {
+    const response = await fetch(`${this.baseURL}/auth/profile`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(profileData)
+    });
+    return this.handleResponse(response);
+  }
+
   async getMyProfile() {
     const response = await fetch(`${this.baseURL}/auth/profile`, {
       headers: this.getAuthHeaders()
     });
     return this.handleResponse(response);
   }
+
 }
 
 export default new ApiService();

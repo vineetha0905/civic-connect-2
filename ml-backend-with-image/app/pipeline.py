@@ -182,16 +182,34 @@ def classify_report(report: dict):
                 # If image processing fails, allow submission (don't block on technical errors)
                 # Continue - don't block legitimate reports due to technical issues
 
-        # STEP 2: Check for location-based duplicate (same category within 10 meters)
-        # This happens AFTER image validation so correct error messages are shown
+        # STEP 2: Check for comprehensive duplicate (requires BOTH image similarity AND text similarity)
+        # Location is used only as a supporting signal to filter candidates, not as a primary condition
         latitude = report.get("latitude")
         longitude = report.get("longitude")
-        if latitude is not None and longitude is not None:
+        image_bytes = report.get("image_bytes")
+        
+        if image_bytes:
             try:
-                if storage.is_duplicate_location(latitude, longitude, description, category, threshold=10.0, store=False):
-                    return reject(report, "A similar issue has already been reported at this location.", category, confidence)
+                # Use comprehensive duplicate detection that requires BOTH image AND text similarity
+                # Location is used to filter candidates (within 50m) but location match alone is NOT sufficient
+                is_dup = storage.is_comprehensive_duplicate(
+                    image_bytes=image_bytes,
+                    description=description,
+                    category=category,
+                    lat=latitude,
+                    lon=longitude,
+                    image_threshold=0,  # Exact image hash match only
+                    text_similarity_threshold=0.6,  # 60% text similarity required
+                    location_threshold=50.0  # Check reports within 50m (supporting signal only)
+                )
+                
+                if is_dup:
+                    print(f"[DEBUG] COMPREHENSIVE DUPLICATE DETECTED: image AND description match")
+                    return reject(report, "A similar issue with the same image and description has already been reported.", category, confidence)
             except Exception as e:
-                print(f"[ERROR] Location duplicate check failed: {str(e)}")
+                print(f"[ERROR] Comprehensive duplicate check failed: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
                 # Continue - don't block on technical errors
 
         urgency = detect_urgency(description)

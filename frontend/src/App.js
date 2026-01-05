@@ -117,7 +117,7 @@ function App() {
       <LanguageContext.Provider value={{
         currentLanguage,
         setCurrentLanguage,
-        t: (key) => languageData[currentLanguage][key] || languageData.en[key]
+        t: (key) => languageData[currentLanguage]?.[key] || languageData.en[key]
       }}>
         <div className="App" style={{
           minHeight: '100vh',
@@ -149,7 +149,7 @@ function App() {
     <LanguageContext.Provider value={{
       currentLanguage,
       setCurrentLanguage,
-      t: (key) => languageData[currentLanguage][key] || languageData.en[key]
+      t: (key) => languageData[currentLanguage]?.[key] || languageData.en[key]
     }}>
       <div className="App">
         <BrowserRouter>

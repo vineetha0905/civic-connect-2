@@ -9,9 +9,8 @@ const Welcome = () => {
 
   const languages = [
     { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'hi', name: 'हिंदी', flag: '🇮🇳' },
-    { code: 'sat', name: 'ᱥᱟᱱᱛᱟᱲᱤ', flag: '🏛️' },
-    { code: 'nag', name: 'नागपुरी', flag: '🏞️' }
+    { code: 'te', name: 'తెలుగు', flag: '🇮🇳' },
+    { code: 'hi', name: 'हिंदी', flag: '🇮🇳' }
   ];
 
   const handleGetStarted = () => {
@@ -38,11 +37,11 @@ const Welcome = () => {
       />
 
       {/* Language Selection Section */}
-      <div className="mb-6 sm:mb-8 w-full max-w-xs sm:max-w-sm">
+      <div className="mb-6 sm:mb-8 w-full max-w-xs sm:max-w-sm md:max-w-2xl">
         <h2 className="text-lg sm:text-xl md:text-2xl mb-3 sm:mb-4 font-medium">
           {t('selectLanguage')}
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {languages.map((lang) => (
             <div
               key={lang.code}

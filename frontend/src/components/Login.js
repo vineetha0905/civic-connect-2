@@ -25,7 +25,7 @@ const Login = ({ setUser, setIsAdmin }) => {
     try {
       const response = await apiService.sendOtpByAadhaar(aadhaar);
       setIsOtpSent(true);
-      setResendCooldown(30); // Start 60-second cooldown
+      setResendCooldown(10); // Start 60-second cooldown
       
       // In development mode, show the OTP
       if (response.data && response.data.otp) {
@@ -54,7 +54,7 @@ const Login = ({ setUser, setIsAdmin }) => {
     setIsLoading(true);
     try {
       const response = await apiService.sendOtpByAadhaar(aadhaar);
-      setResendCooldown(60); // Start 60-second cooldown
+      setResendCooldown(10); // Start 60-second cooldown
       setOtp(''); // Clear the previous OTP input
       
       // In development mode, show the OTP
