@@ -8,3 +8,4 @@ requests
 imagehash
 profanity-check
 
+python-multipart
