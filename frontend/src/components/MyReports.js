@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LanguageContext } from '../App';
 import { ArrowLeft, Calendar, MapPin, ThumbsUp, Eye, Loader2 } from 'lucide-react';
 import apiService from '../services/api';
-import { getIssueImageUrl } from '../utils/imageUtils';
+import { getIssueImageUrl, DEFAULT_PLACEHOLDER_IMAGE } from '../utils/imageUtils';
 
 const MyReports = ({ user }) => {
   const navigate = useNavigate();
@@ -151,6 +151,16 @@ const MyReports = ({ user }) => {
               >
                 {(() => {
                   const imageUrl = getIssueImageUrl(issue);
+                  // Debug log for first issue
+                  if (issue._id === (userIssues[0]?._id || userIssues[0]?.id)) {
+                    console.log('[MyReports] Rendering first issue:', {
+                      issueId: issue._id || issue.id,
+                      imageUrl: imageUrl.substring(0, 100),
+                      isPlaceholder: imageUrl === DEFAULT_PLACEHOLDER_IMAGE,
+                      imagesArray: issue.images,
+                      imagesArrayLength: Array.isArray(issue.images) ? issue.images.length : 'N/A'
+                    });
+                  }
                   const [lat, lng] = issue.location?.coordinates ? [
                     issue.location.coordinates.latitude,
                     issue.location.coordinates.longitude
@@ -163,6 +173,10 @@ const MyReports = ({ user }) => {
                             src={imageUrl}
                             alt={issue.title || 'Issue image'}
                             className="w-full h-full object-cover block"
+                            onError={(e) => {
+                              console.error('[MyReports] Image failed to load:', imageUrl, 'Issue:', issue._id);
+                              e.target.src = DEFAULT_PLACEHOLDER_IMAGE;
+                            }}
                             onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
                           />
                         </div>

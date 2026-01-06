@@ -8,7 +8,7 @@ class IssueController {
 
   // Helper function to normalize image URLs (ensure fully qualified URLs)
   _normalizeImageUrls(issues) {
-    const baseUrl = process.env.BACKEND_URL || process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+    const baseUrl = process.env.BACKEND_URL || process.env.BASE_URL || process.env.FRONTEND_URL || `http://localhost:${process.env.PORT || 5001}`;
     
     return issues.map((issue, index) => {
       // Log first issue for debugging
@@ -19,31 +19,44 @@ class IssueController {
           imagesType: typeof issue.images,
           imagesIsArray: Array.isArray(issue.images),
           imagesLength: Array.isArray(issue.images) ? issue.images.length : 'N/A',
-          imagesFirst: Array.isArray(issue.images) && issue.images.length > 0 ? issue.images[0] : null
+          imagesFirst: Array.isArray(issue.images) && issue.images.length > 0 ? issue.images[0] : null,
+          baseUrl: baseUrl
         });
       }
       
       // Normalize images array - ensure URLs are fully qualified
       if (issue.images && Array.isArray(issue.images) && issue.images.length > 0) {
-        issue.images = issue.images.map((img, imgIndex) => {
+        const normalizedImages = issue.images.map((img, imgIndex) => {
           // If image is already a string URL, keep it as-is or convert to object
           if (typeof img === 'string') {
             const url = img.trim();
-            if (url && this._isValidUrlString(url)) {
-              // Convert string to object format for consistency
-              return { url };
+            // Be more lenient - accept any non-empty string as valid
+            if (url && url !== 'null' && url !== 'undefined' && url !== 'NaN' && url !== '') {
+              // If it's already a full URL, use as-is, otherwise try to fix it
+              if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+                return { url };
+              }
+              // Try to prepend baseUrl if it's a relative path
+              if (!url.startsWith('/')) {
+                return { url: `${baseUrl}/uploads/${url}` };
+              }
+              return { url: `${baseUrl}${url}` };
+            }
+            if (index === 0) {
+              console.warn(`[Backend] Image ${imgIndex} is invalid string:`, url);
             }
             return null; // Invalid string, filter it out
           }
           
           // If image is an object, ensure it has a valid URL
           if (typeof img === 'object' && img !== null) {
-            // Preserve the URL field if it exists
-            let url = (img.url || img.secure_url || img.secureUrl || '').trim();
+            // Preserve the URL field if it exists - check multiple possible fields
+            let url = (img.url || img.secure_url || img.secureUrl || img.imageUrl || img.path || '').trim();
             
-            if (!url || !this._isValidUrlString(url)) {
+            // Be more lenient - accept any non-empty URL
+            if (!url || url === 'null' || url === 'undefined' || url === 'NaN' || url === '') {
               if (index === 0) {
-                console.warn(`[Backend] Image ${imgIndex} has invalid URL:`, img);
+                console.warn(`[Backend] Image ${imgIndex} has no URL field:`, Object.keys(img));
               }
               return null; // Filter out invalid images
             }
@@ -62,6 +75,10 @@ class IssueController {
                 url = `${baseUrl}${url}`;
               } else if (url.startsWith('uploads/')) {
                 url = `${baseUrl}/${url}`;
+              } else if (url.startsWith('/')) {
+                url = `${baseUrl}${url}`;
+              } else {
+                url = `${baseUrl}/uploads/${url}`;
               }
             }
             
@@ -79,15 +96,32 @@ class IssueController {
             return normalized;
           }
           
+          if (index === 0) {
+            console.warn(`[Backend] Image ${imgIndex} has unknown type:`, typeof img, img);
+          }
           return null; // Unknown format, filter it out
-        }).filter(img => img !== null); // Remove null entries
+        }).filter(img => img !== null && img.url); // Remove null entries and entries without URLs
         
-        if (index === 0) {
-          console.log('[Backend] After normalization, images array:', issue.images);
+        // Only update if we have valid images
+        if (normalizedImages.length > 0) {
+          issue.images = normalizedImages;
+          if (index === 0) {
+            console.log('[Backend] After normalization, images array:', JSON.stringify(issue.images, null, 2));
+          }
+        } else {
+          if (index === 0) {
+            console.warn('[Backend] All images were filtered out during normalization');
+          }
+          // Keep original images array even if empty - don't delete it
+          issue.images = [];
         }
       } else {
         if (index === 0) {
-          console.warn('[Backend] Issue has no images array or it is empty');
+          console.warn('[Backend] Issue has no images array or it is empty:', {
+            hasImages: !!issue.images,
+            isArray: Array.isArray(issue.images),
+            length: Array.isArray(issue.images) ? issue.images.length : 'N/A'
+          });
         }
       }
       
@@ -96,11 +130,13 @@ class IssueController {
   }
   
   // Helper function to validate URL string (similar to frontend)
+  // Made more lenient to accept any non-empty string
   _isValidUrlString(value) {
     if (!value || typeof value !== 'string') return false;
     const trimmed = value.trim();
     if (trimmed === '' || trimmed === 'null' || trimmed === 'undefined' || trimmed === 'NaN') return false;
-    return true;
+    // Accept any non-empty string - let the browser handle URL validation
+    return trimmed.length > 0;
   }
   
   // Alias for easier access

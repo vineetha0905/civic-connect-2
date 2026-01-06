@@ -42,18 +42,24 @@ export const getIssueImageUrl = (issue) => {
         
         // If first item is an object, extract URL from common properties
         if (typeof first === 'object' && first !== null) {
-          // Try multiple possible URL property names
-          const url = first.url || first.secure_url || first.secureUrl || first.imageUrl || first.path || first.src;
+          // Try multiple possible URL property names (check in order of likelihood)
+          const url = first.url || first.secure_url || first.secureUrl || first.imageUrl || first.path || first.src || first.image;
           
           if (isValidUrlString(url)) {
-            console.log('[imageUtils] ✓ Found image from issue.images[0].url:', url.substring(0, 50) + '...');
+            const urlPreview = url.length > 50 ? url.substring(0, 50) + '...' : url;
+            console.log('[imageUtils] ✓ Found image from issue.images[0].url:', urlPreview);
             return url;
           } else {
+            // Log more details for debugging
             console.warn('[imageUtils] ✗ images[0] object exists but no valid URL found:', {
               hasUrl: !!first.url,
               urlValue: first.url,
               hasSecureUrl: !!first.secure_url,
-              objectKeys: Object.keys(first)
+              secureUrlValue: first.secure_url,
+              hasImageUrl: !!first.imageUrl,
+              imageUrlValue: first.imageUrl,
+              objectKeys: Object.keys(first),
+              fullObject: first
             });
           }
         }
