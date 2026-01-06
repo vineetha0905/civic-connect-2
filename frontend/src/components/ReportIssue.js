@@ -310,22 +310,33 @@ const ReportIssue = ({ user }) => {
         return;
       }
       
-      // 2) Upload image to Cloudinary ONLY IF ML accepted the report
+      // 2) Upload image to Cloudinary if a file was selected
+      // Upload regardless of ML validation result (ML is non-blocking)
       let imageUrl = null;
       let uploadedPublicId = null;
       
-      if (selectedFile && mlResult && mlResult.accept === true) {
+      if (selectedFile) {
         try {
+          console.log('[ReportIssue] Uploading image to Cloudinary...', selectedFile.name);
           const uploadResponse = await apiService.uploadImage(selectedFile);
           // Support both our backend shape { success, data: { url, publicId } }
           // and any direct shape { url, secure_url, public_id }
           const uploaded = uploadResponse?.data || uploadResponse || {};
           imageUrl = uploaded.url || uploaded.secure_url || null;
           uploadedPublicId = uploaded.publicId || uploaded.public_id || null;
+          
+          if (imageUrl) {
+            console.log('[ReportIssue] ✓ Image uploaded successfully:', imageUrl.substring(0, 50) + '...');
+          } else {
+            console.warn('[ReportIssue] ✗ Image upload response missing URL:', uploadResponse);
+          }
         } catch (uploadError) {
-          console.warn('Image upload failed, continuing without image:', uploadError);
+          console.error('[ReportIssue] ✗ Image upload failed:', uploadError);
+          toast.warning('Image upload failed, but issue will still be created');
           // Continue without image if upload fails
         }
+      } else {
+        console.log('[ReportIssue] No image file selected');
       }
 
       // Prepare issue data (category will be auto-detected by ML backend)
@@ -371,8 +382,17 @@ const ReportIssue = ({ user }) => {
         issueData.priority = 'medium'; // Default priority
       }
 
-      // 3) Submit to backend only if accepted
+      // 3) Submit to backend
+      console.log('[ReportIssue] Submitting issue with data:', {
+        title: issueData.title,
+        hasImages: issueData.images && issueData.images.length > 0,
+        imagesCount: issueData.images?.length || 0,
+        firstImageUrl: issueData.images?.[0]?.url?.substring(0, 60) + '...' || 'none'
+      });
+      
       const response = await apiService.createIssue(issueData);
+      
+      console.log('[ReportIssue] Issue created successfully:', response);
       
       setIsSubmitting(false);
       toast.success('Issue reported successfully!');
