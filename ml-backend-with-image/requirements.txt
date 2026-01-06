@@ -1,6 +1,6 @@
-fastapi
-python-multipart
-uvicorn[standard]
+fastapi>=0.100.0
+python-multipart>=0.0.5
+uvicorn[standard]>=0.20.0
 pydantic
 transformers
 torch

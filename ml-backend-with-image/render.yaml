@@ -2,8 +2,8 @@ services:
   - type: web
     name: civic-connect-ml
     env: python
-    # Build command: upgrade pip, install dependencies
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # Build command: upgrade pip, install dependencies (explicitly install python-multipart first)
+    buildCommand: pip install --upgrade pip && pip install python-multipart && pip install -r requirements.txt
     # Start command: use uvicorn with Render-optimized settings
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 75 --access-log --log-level info
     # Environment variables
